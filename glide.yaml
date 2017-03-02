@@ -1,0 +1,3 @@
+package: github.com/monsterxx03/flowpip
+import:
+- package: github.com/google/gopacket
