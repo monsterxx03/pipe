@@ -5,15 +5,18 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 	"log"
+	"net"
 	"sync"
 )
 
 var localPort = flag.String("p", "80", "Local port to capture traffic")
-var to = flag.String("t", "127.0.0.1:80", "Address to send traffic")
+var to = flag.String("t", "stdout", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
+var decode = flag.String("d", "ascii", "parse payload, support decoder: ascii, redis, mysql")
 var udp = flag.Bool("u", false, "Capture udp protocol")
 var allDevices []pcap.Interface
 
-// tcp dst port 80 and (dst host addr1 or dst host add2)
+// eg: tcp dst port 80 and (dst host addr1 or dst host add2)
+// only monitor incoming traffic
 func buildBPFFilter(udp bool, localIps []string, localPort string) string {
 	result := ""
 	if udp {
@@ -47,14 +50,6 @@ func getDev(devName string) pcap.Interface {
 	panic("Failed to find interface: " + devName)
 }
 
-func getAllIps(dev pcap.Interface) []string {
-	var localIps []string
-	for _, addr := range dev.Addresses {
-		localIps = append(localIps, addr.IP.String())
-	}
-	return localIps
-}
-
 func getAlldevs() []pcap.Interface {
 	if devices, err := pcap.FindAllDevs(); err != nil {
 		panic(err)
@@ -63,12 +58,40 @@ func getAlldevs() []pcap.Interface {
 	}
 }
 
+func getAllIps(dev pcap.Interface) []string {
+	var localIps []string
+	for _, addr := range dev.Addresses {
+		localIps = append(localIps, addr.IP.String())
+	}
+	return localIps
+}
+
+func connect(udp bool, addr string) net.Conn {
+	var protocol string
+	if udp {
+		protocol = "udp"
+	} else {
+		protocol = "tcp"
+	}
+	conn, err := net.Dial(protocol, addr)
+	if err != nil {
+		log.Fatal("Failed to connect to remote:" + addr)
+	}
+	return conn
+}
+
 func main() {
 	flag.Parse()
 	var wg sync.WaitGroup
 	allDevs := getAlldevs()
 	wg.Add(len(allDevs))
+
+	// Replace with Output plugin
+	conn := connect(*udp, *to)
+	defer conn.Close()
+
 	for _, dev := range allDevs {
+		// use one goroutine for every device
 		go func(d pcap.Interface) {
 			handle, err := pcap.OpenLive(d.Name, 65536, true, pcap.BlockForever)
 			if err != nil {
@@ -93,8 +116,9 @@ func main() {
 
 			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 			for packet := range packetSource.Packets() {
-				log.Println(d.Name)
-				log.Println(packet)
+				if aL := packet.ApplicationLayer(); aL != nil {
+					conn.Write(aL.Payload())
+				}
 			}
 			wg.Done()
 		}(dev)
