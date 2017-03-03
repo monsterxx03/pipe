@@ -2,15 +2,16 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
+	"log"
+	"sync"
 )
 
-var iface = flag.String("i", "eth0", "Interface to read packets from")
-var localPort = flag.String("f", "80", "Local port to capture traffic")
+var localPort = flag.String("p", "80", "Local port to capture traffic")
 var to = flag.String("t", "127.0.0.1:80", "Address to send traffic")
 var udp = flag.Bool("u", false, "Capture udp protocol")
+var allDevices []pcap.Interface
 
 // tcp dst port 80 and (dst host addr1 or dst host add2)
 func buildBPFFilter(udp bool, localIps []string, localPort string) string {
@@ -29,7 +30,7 @@ func buildBPFFilter(udp bool, localIps []string, localPort string) string {
 		}
 	}
 	result += " and (" + dstHost + ")"
-	fmt.Println(result)
+	log.Println(result)
 	return result
 }
 
@@ -46,27 +47,57 @@ func getDev(devName string) pcap.Interface {
 	panic("Failed to find interface: " + devName)
 }
 
+func getAllIps(dev pcap.Interface) []string {
+	var localIps []string
+	for _, addr := range dev.Addresses {
+		localIps = append(localIps, addr.IP.String())
+	}
+	return localIps
+}
+
+func getAlldevs() []pcap.Interface {
+	if devices, err := pcap.FindAllDevs(); err != nil {
+		panic(err)
+	} else {
+		return devices
+	}
+}
+
 func main() {
 	flag.Parse()
-	var localIps []string
-	for _, add := range getDev(*iface).Addresses {
-		localIps = append(localIps, add.IP.String())
-	}
-	if len(localIps) == 0 {
-		panic("no ip found")
-	}
-	handle, err := pcap.OpenLive(*iface, 1600, true, pcap.BlockForever)
-	if err != nil {
-		panic(err)
-	}
-	defer handle.Close()
+	var wg sync.WaitGroup
+	allDevs := getAlldevs()
+	wg.Add(len(allDevs))
+	for _, dev := range allDevs {
+		go func(d pcap.Interface) {
+			handle, err := pcap.OpenLive(d.Name, 65536, true, pcap.BlockForever)
+			if err != nil {
+				log.Println("fail to listen:" + d.Name)
+				wg.Done()
+				return
+			}
+			defer handle.Close()
 
-	err = handle.SetBPFFilter(buildBPFFilter(*udp, localIps, *localPort))
-	if err != nil {
-		panic(err)
+			var localIps []string
+			if localIps = getAllIps(d); len(localIps) == 0 {
+				log.Println("No ip found for:" + d.Name)
+				wg.Done()
+				return
+			}
+
+			if err = handle.SetBPFFilter(buildBPFFilter(*udp, localIps, *localPort)); err != nil {
+				log.Println("Failed to set BPF for:" + d.Name)
+				wg.Done()
+				return
+			}
+
+			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+			for packet := range packetSource.Packets() {
+				log.Println(d.Name)
+				log.Println(packet)
+			}
+			wg.Done()
+		}(dev)
 	}
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	for packet := range packetSource.Packets() {
-		fmt.Println(packet)
-	}
+	wg.Wait()
 }

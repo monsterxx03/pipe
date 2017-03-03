@@ -1,8 +1,9 @@
-hash: 9ec7168345cab8d78cb6eb05b02865023b40f0ec2b2d85f1cefc9f104146f4fe
-updated: 2017-03-02T17:27:37.476012438+08:00
+hash: d411d3c2e64c47ecd58a4defd980813f83750a4a8d44c2d3ac207fd5fe0d075e
+updated: 2017-03-03T05:09:36.76255518Z
 imports:
 - name: github.com/google/gopacket
   version: e3b37923d2d3d9cba7d45038a2be5656eccfe291
-- name: golang.org/x/sys/unix
-  version: ""
-devImports: []
+  subpackages:
+  - layers
+  - pcap
+testImports: []
