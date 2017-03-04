@@ -2,18 +2,20 @@ package main
 
 import (
 	"flag"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcap"
 	"log"
 	"net"
 	"sync"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/pcap"
 )
 
 var localPort = flag.String("p", "80", "Local port to capture traffic")
-var to = flag.String("t", "stdout", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
-var decode = flag.String("d", "ascii", "parse payload, support decoder: ascii, redis, mysql")
+var to = flag.String("t", "", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
+var decodeAs = flag.String("d", "", "parse payload, support decoder: ascii, redis, mysql")
 var udp = flag.Bool("u", false, "Capture udp protocol")
 var allDevices []pcap.Interface
+var mode string = "decode" // decode or mirror
 
 // eg: tcp dst port 80 and (dst host addr1 or dst host add2)
 // only monitor incoming traffic
@@ -80,15 +82,30 @@ func connect(udp bool, addr string) net.Conn {
 	return conn
 }
 
-func main() {
+func init() {
 	flag.Parse()
+	if *decodeAs != "" {
+		log.Println("decode:" + *decodeAs)
+		mode = "decode"
+	} else {
+		if *to == "" {
+			log.Fatal("Must provide -t")
+		}
+		log.Println("mirror:" + *to)
+		mode = "mirror"
+	}
+}
+
+func main() {
 	var wg sync.WaitGroup
 	allDevs := getAlldevs()
 	wg.Add(len(allDevs))
 
-	// Replace with Output plugin
-	conn := connect(*udp, *to)
-	defer conn.Close()
+	var conn net.Conn
+	if mode == "mirror" {
+		conn = connect(*udp, *to)
+		defer conn.Close()
+	}
 
 	for _, dev := range allDevs {
 		// use one goroutine for every device
@@ -117,7 +134,11 @@ func main() {
 			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 			for packet := range packetSource.Packets() {
 				if aL := packet.ApplicationLayer(); aL != nil {
-					conn.Write(aL.Payload())
+					if mode == "decode" {
+						decode(*decodeAs, aL.Payload())
+					} else {
+						conn.Write(aL.Payload())
+					}
 				}
 			}
 			wg.Done()

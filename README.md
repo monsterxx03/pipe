@@ -1,8 +1,14 @@
+# Overview
+
+capture -> decode -> stdout 
+        -> remote:host
+
+
 ## Example
 
 Capture tcp traffic on port 80 and decode as ascii
 
-    pipe -p 80 -t stdout -d ascii
+    pipe -p 80 -d ascii
 
 Capture tcp traffic on port 6379 and decode as redis
 
