@@ -10,26 +10,37 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-var localPort = flag.String("p", "80", "Local port to capture traffic")
-var to = flag.String("t", "", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
-var decodeAs = flag.String("d", "", "parse payload, support decoder: ascii, redis, mysql")
-var udp = flag.Bool("u", false, "Capture udp protocol")
-var allDevices []pcap.Interface
-var mode string = "decode" // decode or mirror
+var (
+	localPort  = flag.String("p", "80", "Local port to capture traffic")
+	to         = flag.String("t", "", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
+	traceResp  = flag.Bool("r", false, "Whether to trace response traffic")
+	decodeAs   = flag.String("d", "", "parse payload, support decoder: ascii, redis, mysql")
+	udp        = flag.Bool("u", false, "Capture udp protocol")
+	allDevices []pcap.Interface
+	mode       string = "decode" // decode or mirror
+)
 
-// eg: tcp dst port 80 and (dst host addr1 or dst host add2)
-// only monitor incoming traffic
-func buildBPFFilter(udp bool, localIps []string, localPort string) string {
+// eg: tcp port 80 and (host addr1 or host add2)
+func buildBPFFilter(traceResp bool, udp bool, localIps []string, localPort string) string {
 	result := ""
 	if udp {
 		result += "udp "
 	} else {
 		result += "tcp "
 	}
-	result += "dst port " + localPort
+	if traceResp {
+		result += "port " + localPort
+	} else {
+		// only trace incoming data
+		result += "dst port " + localPort
+	}
 	var dstHost string
 	for i, ip := range localIps {
-		dstHost += " dst host " + ip
+		if traceResp {
+			dstHost += " host " + ip
+		} else {
+			dstHost += " dst host " + ip
+		}
 		if i != len(localIps)-1 {
 			dstHost += " or "
 		}
@@ -85,14 +96,34 @@ func connect(udp bool, addr string) net.Conn {
 func init() {
 	flag.Parse()
 	if *decodeAs != "" {
-		log.Println("decode:" + *decodeAs)
+		_, ok := decodeMap[*decodeAs]
+		if ok == false {
+			log.Fatal("Unknown decode function: ", *decodeAs)
+		}
 		mode = "decode"
 	} else {
 		if *to == "" {
-			log.Fatal("Must provide -t")
+			log.Fatal("Must provide -t or -d")
 		}
 		log.Println("mirror:" + *to)
 		mode = "mirror"
+	}
+}
+
+func handlePacket(conn net.Conn, packet gopacket.Packet) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("recovered in handlePacket:", r)
+		}
+	}()
+	if aL := packet.ApplicationLayer(); aL != nil {
+		if mode == "decode" {
+			if err := decode(*decodeAs, aL.Payload()); err != nil {
+				log.Println("Failed to decode:", err)
+			}
+		} else {
+			conn.Write(aL.Payload())
+		}
 	}
 }
 
@@ -120,12 +151,11 @@ func main() {
 
 			var localIps []string
 			if localIps = getAllIps(d); len(localIps) == 0 {
-				log.Println("No ip found for:" + d.Name)
 				wg.Done()
 				return
 			}
 
-			if err = handle.SetBPFFilter(buildBPFFilter(*udp, localIps, *localPort)); err != nil {
+			if err = handle.SetBPFFilter(buildBPFFilter(*traceResp, *udp, localIps, *localPort)); err != nil {
 				log.Println("Failed to set BPF for:" + d.Name)
 				wg.Done()
 				return
@@ -133,13 +163,7 @@ func main() {
 
 			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 			for packet := range packetSource.Packets() {
-				if aL := packet.ApplicationLayer(); aL != nil {
-					if mode == "decode" {
-						decode(*decodeAs, aL.Payload())
-					} else {
-						conn.Write(aL.Payload())
-					}
-				}
+				handlePacket(conn, packet)
 			}
 			wg.Done()
 		}(dev)

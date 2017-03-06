@@ -1,26 +1,28 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"log"
+	_ "log"
 )
 
-func decodeHttp(data []byte) {
-	log.Println("decode http")
-}
+type decodeFunc func(data []byte) (interface{}, error)
 
-func decodeRedis(data []byte) {
-	log.Println("decode redis")
-}
-
-func decode(protocol string, data []byte) {
-	if protocol == "ascii" {
+var decodeMap = map[string]decodeFunc{
+	"ascii": func(data []byte) (interface{}, error) {
 		fmt.Println(string(data))
-	} else if protocol == "http" {
-		decodeHttp(data)
-	} else if protocol == "redis" {
-		decodeRedis(data)
+		return nil, nil
+	},
+	"http":  decodeHttp,
+	"redis": decodeRedis,
+}
+
+func decode(protocol string, data []byte) error {
+	decoder, ok := decodeMap[protocol]
+	if ok {
+		decoder(data)
+		return nil
 	} else {
-		panic("unknow protocol:" + protocol)
+		return errors.New("unknown protocol: " + protocol)
 	}
 }
