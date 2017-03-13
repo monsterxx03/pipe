@@ -2,10 +2,7 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"io"
-	_ "log"
 	"strconv"
 	_ "strings"
 )
@@ -18,53 +15,63 @@ const (
 	respArray  = '*'
 )
 
-func decodeRedis(data []byte) (interface{}, error) {
-	buf := bytes.NewBuffer(data)
+type redisDecoder struct {
+	buf bytes.Buffer
+}
 
-	for {
-		line, err := buf.ReadString('\n')
-		if err == io.EOF && len(line) == 0 {
-			break
-		}
-		line = line[:len(line)-2] // truncate end \r\n
-		headerByte, resp := line[0], line[1:]
-		switch headerByte {
-		case respOK:
-			return resp, nil
-		case respERROR:
-			return errors.New(resp), nil
-		case respInt:
-			return strconv.ParseInt(resp, 10, 64)
-		case respString:
-			strLen, err := strconv.Atoi(resp)
-			if err != nil {
-				return nil, err
-			}
-			if strLen == -1 {
-				return nil, nil
-			}
-			line, _ = buf.ReadString('\n')
-			return string(line[:len(line)-2]), nil
-		case respArray:
-			arrayLen, _ := strconv.Atoi(resp)
-			result := make([]string, arrayLen)
-			for i := 0; i < arrayLen; i++ {
-				line, _ := buf.ReadString('\n')
-				subResult, err := decodeRedis([]byte(line[:len(line)-2]))
-				if err != nil {
-					return nil, err
-				}
-				// TODO convert subResult to []byte
-				result = append(result, subResult)
-			}
-			return result, nil
-		default:
-			fmt.Println("unknow")
-		}
+type RedisMsg interface{}
 
-		if err == io.EOF {
-			break
-		}
+func newRedisDecoder(data []byte) *redisDecoder {
+	return &redisDecoder{*bytes.NewBuffer(data)}
+}
+
+func (d *redisDecoder) decode() (string, error) {
+	result := d.decodeRedisMsg
+	fmt.Println(result)
+	return "ahah", nil
+}
+
+func (d *redisDecoder) decodeRedisMsg() (RedisMsg, error) {
+	line, err := d.buf.ReadString('\n')
+	if err != nil {
+		return "", err
 	}
-	return nil, nil
+	line = line[:len(line)-2] // truncate end \r\n
+	headerByte, resp := line[0], line[1:]
+	switch headerByte {
+	case respOK:
+		return resp, nil
+	case respERROR:
+		return resp, nil
+	case respInt:
+		if intValue, err := strconv.Atoi(resp); err != nil {
+			return nil, err
+		} else {
+			return intValue, nil
+		}
+	case respString:
+		strLen, err := strconv.Atoi(resp)
+		if err != nil {
+			return "", err
+		}
+		if strLen == -1 {
+			return nil, nil
+		}
+		line, _ = d.buf.ReadString('\n')
+		return string(line[:len(line)-2]), nil
+	case respArray:
+		arrayLen, err := strconv.Atoi(resp)
+		if err != nil {
+			return "", err
+		}
+		result := make([]RedisMsg, arrayLen)
+		for i := 0; i < arrayLen; i++ {
+			if result[i], err = d.decode(); err != nil {
+				return "", err
+			}
+		}
+		return result, nil
+	default:
+		return nil, nil
+	}
 }

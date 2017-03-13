@@ -1,10 +1,15 @@
 package main
 
-import (
-	"log"
-)
+import "bytes"
 
-func decodeHttp(data []byte) (interface{}, error) {
-	log.Println("decode http")
-	return nil, nil
+type httpDecoder struct {
+	buf bytes.Buffer
+}
+
+func (d *httpDecoder) decode() (string, error) {
+	return "http" + d.buf.String(), nil
+}
+
+func newHttpDecoder(data []byte) *httpDecoder {
+	return &httpDecoder{*bytes.NewBuffer(data)}
 }

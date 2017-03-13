@@ -96,10 +96,6 @@ func connect(udp bool, addr string) net.Conn {
 func init() {
 	flag.Parse()
 	if *decodeAs != "" {
-		_, ok := decodeMap[*decodeAs]
-		if ok == false {
-			log.Fatal("Unknown decode function: ", *decodeAs)
-		}
 		mode = "decode"
 	} else {
 		if *to == "" {
@@ -118,8 +114,10 @@ func handlePacket(conn net.Conn, packet gopacket.Packet) {
 	}()
 	if aL := packet.ApplicationLayer(); aL != nil {
 		if mode == "decode" {
-			if err := decode(*decodeAs, aL.Payload()); err != nil {
+			if data, err := decode(*decodeAs, aL.Payload()); err != nil {
 				log.Println("Failed to decode:", err)
+			} else {
+				log.Println(data)
 			}
 		} else {
 			conn.Write(aL.Payload())
