@@ -1,5 +1,5 @@
 all: clean build
-test: test_redis
+test: build test_redis
 
 build:
 	go build

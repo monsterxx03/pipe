@@ -1,14 +1,18 @@
 language: go
-
 go:
-    - 1.8.x
-
+- 1.8.x
 before_install:
-    - sudo apt-get install -y libpcap-dev
-
+- sudo apt-get install -y libpcap-dev
 install:
-    - go get github.com/Masterminds/glide
-    - glide install
-
+- go get github.com/Masterminds/glide
+- glide install
 script:
-    - make test
+- make test
+deploy:
+  provider: releases
+  api_key:
+    secure: B+0qWV7nXBjO2RPmBqE459JlLB9IcIRMoNT4cFzCDENoP8B3j1NqPu8vfNaL9cI/+rOHkMINsdrIoHWy+oyGCG2xZ6zGvmqaAQRO2O8vyyaW6MwZ6doadYZH7DSJvJw/38TBnxSdUC1+3LYjcFx5It4V/NQ0bhiEvuBHQHVrxJgKcAB6djzSwKDlr1Q1jFIitbWYSz5yGOJHDDaJ/g6XyCo1/JNQ33oorArPFEdLj7Y6RiOsSAfOflcED6NVLZmjj2mnFP9IvqOJe9DfbGh7Uo5GhHQXnOnrP6W59+DgzQFXYTEsYD38y4ryr8x9aUZgM41drKPl0zzkL7AYEKpiQys03WzxbhtY+aaMbPNzzSlTNj6ZQq8YyzIELGkdy79po8wMmg4e7bDnRw4MQL1LUO8dcDxxiaQnoWe/JBOBHBrD7PDxuNPlaWTaqHxa+17W0Y2rMYe06PhmPjAfNtdgWD9sfe0EO8hSkMU7MpAPxp3een1BI8KT94eYr2hmXCGVsgBC44gAVe06MGLlyp3FH2jznXov73nOsh27oqUrerdx/YKVfyMdFWvsiSHiO1EeaDUUG23Qt+TtW/TCFON3NJxEh9jOiGkeKJPcaCNssxKK7ayt82DLzVPcoyWDbU87lbV9vIVy6RKSo/rrDRs6Gnxz742AtgJjNOYrNwkMnCc=
+  file: pipe
+  on:
+    repo: monsterxx03/pipe
+    tags: true
