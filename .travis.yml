@@ -4,6 +4,7 @@ go:
     - 1.8.x
 
 install:
+    - apt install libpcap-dev
     - go get github.com/Masterminds/glide
     - glide install
 
