@@ -82,6 +82,10 @@ func (d *redisDecoder) decodeRedisMsg() (RedisMsg, error) {
 		if err != nil {
 			return "", err
 		}
+		if arrayLen == -1 {
+			// empty array
+			return nil, nil
+		}
 		result := make([]RedisMsg, arrayLen)
 		for i := 0; i < arrayLen; i++ {
 			if result[i], err = d.decode(); err != nil {

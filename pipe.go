@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"net"
+	"runtime/debug"
 	"sync"
 
 	"github.com/google/gopacket"
@@ -110,6 +111,7 @@ func handlePacket(conn net.Conn, packet gopacket.Packet) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("recovered in handlePacket:", r)
+			debug.PrintStack()
 		}
 	}()
 	if aL := packet.ApplicationLayer(); aL != nil {
