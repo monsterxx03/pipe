@@ -3,8 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	_ "log"
 	"strconv"
-	_ "strings"
+	"strings"
 )
 
 const (
@@ -26,9 +27,26 @@ func newRedisDecoder(data []byte) *redisDecoder {
 }
 
 func (d *redisDecoder) decode() (string, error) {
-	result := d.decodeRedisMsg
-	fmt.Println(result)
-	return "ahah", nil
+	if result, err := d.decodeRedisMsg(); err != nil {
+		return "", err
+	} else {
+		switch v := result.(type) {
+		case nil:
+			return "nil", nil
+		case int:
+			return string(v), nil
+		case string:
+			return v, nil
+		case []RedisMsg:
+			_result := make([]string, len(v))
+			for i, item := range v {
+				_result[i] = fmt.Sprint(item)
+			}
+			return strings.Join(_result, " "), nil
+		default:
+			return fmt.Sprint(v), nil
+		}
+	}
 }
 
 func (d *redisDecoder) decodeRedisMsg() (RedisMsg, error) {
