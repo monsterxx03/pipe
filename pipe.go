@@ -107,21 +107,35 @@ func init() {
 	}
 }
 
-func handlePacket(conn net.Conn, packet gopacket.Packet) {
+func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("recovered in handlePacket:", r)
 			debug.PrintStack()
 		}
 	}()
-	if aL := packet.ApplicationLayer(); aL != nil {
-		if mode == "decode" {
-			if data, err := decode(*decodeAs, aL.Payload()); err != nil {
-				log.Println("Failed to decode:", err)
+	if mode == "decode" {
+		if net := packet.TransportLayer(); net != nil {
+			// decode transport layer to get port info
+			var direction string
+			srcPort, _ := net.TransportFlow().Endpoints()
+			if srcPort.String() == localPort {
+				direction = "resp: >>>"
 			} else {
-				log.Println(data)
+				direction = "req: <<<"
 			}
-		} else {
+
+			if aL := packet.ApplicationLayer(); aL != nil {
+				if data, err := decode(*decodeAs, aL.Payload()); err != nil {
+					log.Println("Failed to decode:", err)
+				} else {
+					log.Println(direction + data)
+				}
+			}
+		}
+	} else {
+		// mirror to remote
+		if aL := packet.ApplicationLayer(); aL != nil {
 			conn.Write(aL.Payload())
 		}
 	}
@@ -163,7 +177,7 @@ func main() {
 
 			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 			for packet := range packetSource.Packets() {
-				handlePacket(conn, packet)
+				handlePacket(conn, packet, *localPort)
 			}
 			wg.Done()
 		}(dev)
