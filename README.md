@@ -1,7 +1,7 @@
-# Overview
+# Capture and mirror network traffic
 
-capture -> decode -> stdout 
-        -> remote:host
+[![Build Status](https://travis-ci.org/monsterxx03/pipe.svg?branch=master)](https://travis-ci.org/monsterxx03/pipe)
+
 
 
 ## Example
