@@ -34,7 +34,7 @@ func (d *redisDecoder) decode() (string, error) {
 		case nil:
 			return "nil", nil
 		case int:
-			return string(v), nil
+			return strconv.Itoa(v), nil
 		case string:
 			return v, nil
 		case []RedisMsg:
@@ -76,7 +76,7 @@ func (d *redisDecoder) decodeRedisMsg() (RedisMsg, error) {
 			return nil, nil
 		}
 		line, _ = d.buf.ReadString('\n')
-		return string(line[:len(line)-2]), nil
+		return line[:len(line)-2], nil
 	case respArray:
 		arrayLen, err := strconv.Atoi(resp)
 		if err != nil {

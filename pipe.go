@@ -43,11 +43,10 @@ func buildBPFFilter(traceResp bool, udp bool, localIps []string, localPort strin
 			dstHost += " dst host " + ip
 		}
 		if i != len(localIps)-1 {
-			dstHost += " or "
+			dstHost += " or"
 		}
 	}
 	result += " and (" + dstHost + ")"
-	log.Println(result)
 	return result
 }
 
