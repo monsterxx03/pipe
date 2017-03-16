@@ -80,15 +80,15 @@ func getAllIps(dev pcap.Interface) []string {
 }
 
 func connect(udp bool, addr string) net.Conn {
-	var protocol string
+	var err error
+	var conn net.Conn
 	if udp {
-		protocol = "udp"
+		conn, err = net.Dial("udp", addr)
 	} else {
-		protocol = "tcp"
+		conn, err = net.Dial("tcp", addr)
 	}
-	conn, err := net.Dial(protocol, addr)
 	if err != nil {
-		log.Fatal("Failed to connect to remote:" + addr)
+		log.Fatal(err)
 	}
 	return conn
 }
@@ -128,14 +128,26 @@ func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
 				if data, err := decode(*decodeAs, aL.Payload()); err != nil {
 					log.Println("Failed to decode:", err)
 				} else {
-					log.Println(direction + data)
+					log.Printf("%v %q\n", direction, data)
 				}
 			}
 		}
 	} else {
 		// mirror to remote
 		if aL := packet.ApplicationLayer(); aL != nil {
-			conn.Write(aL.Payload())
+			count, err := conn.Write(aL.Payload())
+			if err != nil {
+				log.Println(err)
+			} else {
+				log.Println("sent ", count)
+			}
+			resp := make([]byte, 1024)
+			count, err = conn.Read(resp)
+			if err != nil {
+				log.Println(err)
+			} else {
+				log.Println("read ", count)
+			}
 		}
 	}
 }
