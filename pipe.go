@@ -129,9 +129,9 @@ func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
 			var direction string
 			srcPort, _ := net.TransportFlow().Endpoints()
 			if srcPort.String() == localPort {
-				direction = "resp: >>>"
+				direction = "resp:\n"
 			} else {
-				direction = "req: <<<"
+				direction = "req:\n"
 			}
 
 			if aL := packet.ApplicationLayer(); aL != nil {
