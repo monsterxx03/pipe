@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 )
 
@@ -106,18 +107,18 @@ func init() {
 	}
 }
 
-func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
+func handlePacket(handle *pcap.Handle, packet gopacket.Packet, localPort string) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("recovered in handlePacket:", r)
 			debug.PrintStack()
 		}
 	}()
-	if mode == "decode" {
-		if net := packet.TransportLayer(); net != nil {
-			// decode transport layer to get port info
-			var direction string
-			srcPort, _ := net.TransportFlow().Endpoints()
+	if trans := packet.TransportLayer(); trans != nil {
+		// decode transport layer to get port info
+		var direction string
+		srcPort, _ := trans.TransportFlow().Endpoints()
+		if mode == "decode" {
 			if srcPort.String() == localPort {
 				direction = "resp: >>>"
 			} else {
@@ -131,22 +132,32 @@ func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
 					log.Printf("%v %q\n", direction, data)
 				}
 			}
-		}
-	} else {
-		// mirror to remote
-		if aL := packet.ApplicationLayer(); aL != nil {
-			count, err := conn.Write(aL.Payload())
-			if err != nil {
-				log.Println(err)
-			} else {
-				log.Println("sent ", count)
+		} else {
+			aL := packet.ApplicationLayer()
+			if aL == nil {
+				return
 			}
-			resp := make([]byte, 1024)
-			count, err = conn.Read(resp)
+			// mirror to remote
+			buffer := gopacket.NewSerializeBuffer()
+			opts := gopacket.SerializeOptions{}
+
+			ether := &layers.Ethernet{
+				SrcMAC: net.HardwareAddr{0, 0, 0, 0, 0, 0},
+				DstMAC: net.HardwareAddr{0, 0, 0, 0, 0, 0},
+			}
+			ip := &layers.IPv4{
+				SrcIP: net.IP{127, 0, 0, 1},
+				DstIP: net.IP{127, 0, 0, 1},
+			}
+			tcp := &layers.TCP{
+				SrcPort: 4577,
+				DstPort: 6010,
+			}
+			gopacket.SerializeLayers(buffer, opts,
+				ether, ip, tcp, gopacket.Payload(aL.Payload()))
+			err := handle.WritePacketData(buffer.Bytes())
 			if err != nil {
 				log.Println(err)
-			} else {
-				log.Println("read ", count)
 			}
 		}
 	}
@@ -156,12 +167,6 @@ func main() {
 	var wg sync.WaitGroup
 	allDevs := getAlldevs()
 	wg.Add(len(allDevs))
-
-	var conn net.Conn
-	if mode == "mirror" {
-		conn = connect(*udp, *to)
-		defer conn.Close()
-	}
 
 	for _, dev := range allDevs {
 		// use one goroutine for every device
@@ -188,7 +193,7 @@ func main() {
 
 			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 			for packet := range packetSource.Packets() {
-				handlePacket(conn, packet, *localPort)
+				handlePacket(handle, packet, *localPort)
 			}
 			wg.Done()
 		}(dev)
