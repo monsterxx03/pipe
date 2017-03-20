@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"net"
+	"os"
 	"runtime/debug"
 	"sync"
 
@@ -12,13 +13,15 @@ import (
 )
 
 var (
-	localPort  = flag.String("p", "80", "Local port to capture traffic")
-	to         = flag.String("t", "", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
-	traceResp  = flag.Bool("r", false, "Whether to trace response traffic")
-	decodeAs   = flag.String("d", "", "parse payload, support decoder: ascii, redis, mysql")
-	udp        = flag.Bool("u", false, "Capture udp protocol")
-	allDevices []pcap.Interface
-	mode       string = "decode" // decode or mirror
+	localPort   = flag.String("p", "80", "Local port to capture traffic")
+	to          = flag.String("t", "", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
+	traceResp   = flag.Bool("r", false, "Whether to trace response traffic")
+	decodeAs    = flag.String("d", "", "parse payload, support decoder: ascii, redis, mysql")
+	udp         = flag.Bool("u", false, "Capture udp protocol")
+	writeToFile = flag.String("w", "", "Write payload to file")
+	allDevices  []pcap.Interface
+	mode        string   = "decode" // decode or mirror
+	localFile   *os.File = nil
 )
 
 // eg: tcp port 80 and (host addr1 or host add2)
@@ -104,6 +107,13 @@ func init() {
 		log.Println("mirror:" + *to)
 		mode = "mirror"
 	}
+	if *writeToFile != "" {
+		var err error
+		localFile, err = os.OpenFile(*writeToFile, os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
@@ -129,13 +139,20 @@ func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
 					log.Println("Failed to decode:", err)
 				} else {
 					log.Printf("%v %q\n", direction, data)
+					if localFile != nil {
+						writePayload([]byte(data))
+					}
 				}
 			}
 		}
 	} else {
 		// mirror to remote
 		if aL := packet.ApplicationLayer(); aL != nil {
-			count, err := conn.Write(aL.Payload())
+			data := aL.Payload()
+			if localFile != nil {
+				writePayload(data)
+			}
+			count, err := conn.Write(data)
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -152,6 +169,17 @@ func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
 	}
 }
 
+func writePayload(data []byte) {
+	_, err := localFile.Write(data)
+	if err != nil {
+		panic(err)
+	}
+	_, err = localFile.Write([]byte{'\n'})
+	if err != nil {
+		panic(err)
+	}
+}
+
 func main() {
 	var wg sync.WaitGroup
 	allDevs := getAlldevs()
@@ -161,6 +189,10 @@ func main() {
 	if mode == "mirror" {
 		conn = connect(*udp, *to)
 		defer conn.Close()
+	}
+
+	if localFile != nil {
+		defer localFile.Close()
 	}
 
 	for _, dev := range allDevs {
