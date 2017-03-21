@@ -20,14 +20,11 @@ func (d *AsciiDecoder) Decode(data []byte) (string, error) {
 func GetDecoder(decodeAs, filterStr string) (Decoder, error) {
 	switch decodeAs {
 	case "ascii":
-		d := new(AsciiDecoder)
-		return d, nil
+		return new(AsciiDecoder), nil
 	case "http":
-		d := NewHttpDecoder(filterStr)
-		return d, nil
+		return NewHttpDecoder(filterStr), nil
 	case "redis":
-		d := NewRedisDecoder(filterStr)
-		return d, nil
+		return NewRedisDecoder(filterStr), nil
 	default:
 		return nil, errors.New("unknow protocol: " + decodeAs)
 	}

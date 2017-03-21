@@ -19,6 +19,9 @@ func (f *HttpFilter) Match(msg HttpMsg) bool {
 }
 
 func (f *HttpFilter) compile() {
+	if len(f.filterStr) == 0 {
+		return
+	}
 	pattern := regexp.MustCompile("\\s+&\\s+")
 	filters := pattern.Split(f.filterStr, -1)
 	subPattern := regexp.MustCompile("\\s*:\\s*")
