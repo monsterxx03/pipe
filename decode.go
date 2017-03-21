@@ -17,7 +17,7 @@ func (d *AsciiDecoder) Decode(data []byte) (string, error) {
 	return string(data), nil
 }
 
-func GetDecoder(decodeAs, filterStr string) (Decoder, error) {
+func getDecoder(decodeAs, filterStr string) (Decoder, error) {
 	switch decodeAs {
 	case "ascii":
 		return new(AsciiDecoder), nil

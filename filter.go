@@ -18,6 +18,10 @@ func (f *HttpFilter) Match(msg HttpMsg) bool {
 	return false
 }
 
+func (f *HttpFilter) IsEmpty() bool {
+	return len(f.filters) == 0
+}
+
 func (f *HttpFilter) compile() {
 	if len(f.filterStr) == 0 {
 		return

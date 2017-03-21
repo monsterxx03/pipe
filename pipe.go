@@ -103,7 +103,7 @@ func InitCli() {
 	var err error
 	if *decodeAs != "" {
 		mode = "decode"
-		decoder, err = GetDecoder(*decodeAs, *filterStr)
+		decoder, err = getDecoder(*decodeAs, *filterStr)
 	} else {
 		if *to == "" {
 			log.Fatal("Must provide -t or -d")
