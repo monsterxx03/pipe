@@ -16,17 +16,20 @@ const (
 	respArray  = '*'
 )
 
-type redisDecoder struct {
+type RedisDecoder struct {
 	buf bytes.Buffer
 }
 
 type RedisMsg interface{}
 
-func newRedisDecoder(data []byte) *redisDecoder {
-	return &redisDecoder{*bytes.NewBuffer(data)}
+func NewRedisDecoder(filterStr string) *RedisDecoder {
+	return new(RedisDecoder)
 }
 
-func (d *redisDecoder) decode() (string, error) {
+func (d *RedisDecoder) Decode(data []byte) (string, error) {
+	if len(data) > 1 {
+		d.buf.Write(data)
+	}
 	if result, err := d.decodeRedisMsg(); err != nil {
 		return "", err
 	} else {
@@ -49,7 +52,7 @@ func (d *redisDecoder) decode() (string, error) {
 	}
 }
 
-func (d *redisDecoder) decodeRedisMsg() (RedisMsg, error) {
+func (d *RedisDecoder) decodeRedisMsg() (RedisMsg, error) {
 	line, err := d.buf.ReadString('\n')
 	if err != nil {
 		return "", err
@@ -88,7 +91,7 @@ func (d *redisDecoder) decodeRedisMsg() (RedisMsg, error) {
 		}
 		result := make([]RedisMsg, arrayLen)
 		for i := 0; i < arrayLen; i++ {
-			if result[i], err = d.decode(); err != nil {
+			if result[i], err = d.Decode([]byte{}); err != nil {
 				return "", err
 			}
 		}

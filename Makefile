@@ -1,5 +1,5 @@
 all: clean build
-test: build test_redis
+test: build go_test
 
 build:
 	go build
@@ -7,5 +7,5 @@ build:
 clean:
 	test -f pipe && rm pipe || echo 'cleaned' 
 
-test_redis:
-	go test -d redis
+go_test:
+	go test

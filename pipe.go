@@ -19,9 +19,11 @@ var (
 	decodeAs    = flag.String("d", "", "parse payload, support decoder: ascii, redis, mysql")
 	udp         = flag.Bool("u", false, "Capture udp protocol")
 	writeToFile = flag.String("w", "", "Write payload to file")
+	filterStr   = flag.String("f", "", "used to parse msg")
 	allDevices  []pcap.Interface
 	mode        string   = "decode" // decode or mirror
 	localFile   *os.File = nil
+	decoder     Decoder  = nil
 )
 
 // eg: tcp port 80 and (host addr1 or host add2)
@@ -96,10 +98,12 @@ func connect(udp bool, addr string) net.Conn {
 	return conn
 }
 
-func init() {
+func InitCli() {
 	flag.Parse()
+	var err error
 	if *decodeAs != "" {
 		mode = "decode"
+		decoder, err = GetDecoder(*decodeAs, *filterStr)
 	} else {
 		if *to == "" {
 			log.Fatal("Must provide -t or -d")
@@ -108,7 +112,6 @@ func init() {
 		mode = "mirror"
 	}
 	if *writeToFile != "" {
-		var err error
 		localFile, err = os.OpenFile(*writeToFile, os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			panic(err)
@@ -135,7 +138,7 @@ func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
 			}
 
 			if aL := packet.ApplicationLayer(); aL != nil {
-				if data, err := decode(*decodeAs, aL.Payload()); err != nil {
+				if data, err := decoder.Decode(aL.Payload()); err != nil {
 					log.Println("Failed to decode:", err)
 				} else {
 					log.Printf("%v %q\n", direction, data)
@@ -181,6 +184,7 @@ func writePayload(data []byte) {
 }
 
 func main() {
+	InitCli()
 	var wg sync.WaitGroup
 	allDevs := getAlldevs()
 	wg.Add(len(allDevs))

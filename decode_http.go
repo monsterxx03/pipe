@@ -2,14 +2,23 @@ package main
 
 import "bytes"
 
-type httpDecoder struct {
-	buf bytes.Buffer
+type HttpDecoder struct {
+	buf    bytes.Buffer
+	filter *HttpFilter
 }
 
-func (d *httpDecoder) decode() (string, error) {
-	return "http" + d.buf.String(), nil
+type HttpMsg struct {
+	method  string
+	url     string
+	headers map[string]string
+	body    string
 }
 
-func newHttpDecoder(data []byte) *httpDecoder {
-	return &httpDecoder{*bytes.NewBuffer(data)}
+func (d *HttpDecoder) Decode(data []byte) (string, error) {
+	d.buf.Write(data)
+	return d.buf.String(), nil
+}
+
+func NewHttpDecoder(filterStr string) *HttpDecoder {
+	return &HttpDecoder{filter: NewHttpFilter(filterStr)}
 }

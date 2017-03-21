@@ -6,32 +6,29 @@ import (
 )
 
 type Decoder interface {
-	decode() (string, error)
+	Decode([]byte) (string, error)
 }
 
-type asciiDecoder struct {
+type AsciiDecoder struct {
 	data []byte
 }
 
-func (d *asciiDecoder) decode() (string, error) {
-	return string(d.data), nil
+func (d *AsciiDecoder) Decode(data []byte) (string, error) {
+	return string(data), nil
 }
 
-func decode(protocol string, data []byte) (string, error) {
-	var d Decoder
-	switch protocol {
+func GetDecoder(decodeAs, filterStr string) (Decoder, error) {
+	switch decodeAs {
 	case "ascii":
-		d = &asciiDecoder{data}
+		d := new(AsciiDecoder)
+		return d, nil
 	case "http":
-		d = newHttpDecoder(data)
+		d := NewHttpDecoder(filterStr)
+		return d, nil
 	case "redis":
-		d = newRedisDecoder(data)
+		d := NewRedisDecoder(filterStr)
+		return d, nil
 	default:
-		return "", errors.New("unknown protocol: " + protocol)
-	}
-	if resp, err := d.decode(); err != nil {
-		return "", err
-	} else {
-		return resp, nil
+		return nil, errors.New("unknow protocol: " + decodeAs)
 	}
 }

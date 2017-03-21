@@ -5,8 +5,8 @@ import (
 )
 
 func checkRedisCmd(t *testing.T, data []byte, expected string) {
-	decoder := newRedisDecoder(data)
-	result, err := decoder.decode()
+	decoder := NewRedisDecoder("")
+	result, err := decoder.Decode(data)
 	if err != nil {
 		t.Error(err)
 	}
