@@ -14,11 +14,6 @@ func (f HttpFilter) String() string {
 	return f.filterStr
 }
 
-func (f *HttpFilter) Match(msg HttpMsg) bool {
-	// TODO filter HttpMsg
-	return false
-}
-
 func (f *HttpFilter) IsEmpty() bool {
 	return len(f.filters) == 0
 }

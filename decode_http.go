@@ -2,17 +2,10 @@ package main
 
 import (
 	"bytes"
-	"errors"
-	"log"
+	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
-)
-
-const (
-	httpParseFirstLine = iota
-	httpParseHeader
-	httpParseBody
-	httpParseDone
 )
 
 type HttpDecoder struct {
@@ -20,14 +13,13 @@ type HttpDecoder struct {
 	filter *HttpFilter
 }
 
+type HttpMsg interface {
+	Match(f *HttpFilter) bool
+}
+
 type HttpMixin struct {
 	headers map[string]string
 	body    []byte
-}
-
-type HttpMsg interface {
-	parseHeader(*bytes.Buffer) error
-	parseBody(*bytes.Buffer) error
 }
 
 func (m *HttpMixin) parseHeader(buf *bytes.Buffer) error {
@@ -56,11 +48,56 @@ func (m *HttpMixin) parseBody(buf *bytes.Buffer) error {
 	return nil
 }
 
+func matchHeaders(rules map[string]*regexp.Regexp, headers map[string]string) bool {
+	for h, pattern := range rules {
+		value, ok := headers[h]
+		if !ok {
+			// header not exist, so not match
+			return false
+		}
+		if !pattern.MatchString(value) {
+			return false
+		}
+	}
+	return true
+}
+
+func matchBody(pattern *regexp.Regexp, body []byte) bool {
+	if !pattern.Match(body) {
+		return false
+	}
+	return true
+}
+
 type HttpReq struct {
 	method  string
 	url     string
 	version string
 	HttpMixin
+}
+
+func (m *HttpReq) Match(filter *HttpFilter) bool {
+	filters := filter.filters
+	if _, ok := filters["method"]; ok && !filters["method"].MatchString(m.method) {
+		return false
+	}
+	delete(filters, "method")
+	if _, ok := filters["url"]; ok && !filters["url"].MatchString(m.url) {
+		return false
+	}
+	delete(filters, "url")
+	if _, ok := filters["version"]; ok && !filters["version"].MatchString(m.version) {
+		return false
+	}
+	delete(filters, "version")
+	if _, ok := filters["body"]; ok && !matchBody(filters["body"], m.body) {
+		return false
+	}
+	delete(filters, "body")
+	if len(filters) > 0 && !matchHeaders(filters, m.headers) {
+		return false
+	}
+	return true
 }
 
 type HttpResp struct {
@@ -70,49 +107,70 @@ type HttpResp struct {
 	HttpMixin
 }
 
-func (m *HttpReq) String() string {
-	// TODO format output
-	return m.url
-}
-
-func (m *HttpResp) String() string {
-	// TODO format output
-	return m.statusMsg
+func (m *HttpResp) Match(filter *HttpFilter) bool {
+	filters := filter.filters
+	if _, ok := filters["version"]; ok && !filters["version"].MatchString(m.version) {
+		return false
+	}
+	delete(filters, "version")
+	if _, ok := filters["statusCode"]; ok && !filters["statusCode"].MatchString(strconv.Itoa(m.statusCode)) {
+		return false
+	}
+	delete(filters, "statusCode")
+	if _, ok := filters["statusMsg"]; ok && !filters["statusMsg"].MatchString(m.statusMsg) {
+		return false
+	}
+	delete(filters, "statusMsg")
+	if _, ok := filters["body"]; ok && !matchBody(filters["body"], m.body) {
+		return false
+	}
+	delete(filters, "body")
+	if len(filters) > 0 && !matchHeaders(filters, m.headers) {
+		return false
+	}
+	return true
 }
 
 func (d *HttpDecoder) Decode(data []byte) (string, error) {
+	d.write(data)
+	if msg, err := d.decodeHttp(); err != nil {
+		return "", err
+	} else {
+		return fmt.Sprintf("%v", msg), nil
+	}
+}
+
+func (d *HttpDecoder) write(data []byte) {
 	if len(data) > 0 {
 		d.buf.Write(data)
 	}
-	var err error
-	var msg HttpMsg
-	if data[0] == 72 && data[1] == 84 { // starts with HT
-		msg = new(HttpResp)
-		err = d.parseResponse(msg.(*HttpResp))
-	} else {
-		msg = new(HttpReq)
-		err = d.parseRequest(msg.(*HttpReq))
-	}
-	if err = msg.parseHeader(d.buf); err != nil {
-		return "", err
-	}
-	if err = msg.parseBody(d.buf); err != nil {
-		return "", err
-	}
-	log.Println(msg)
-
-	if !d.filter.IsEmpty() && d.filter.Match(msg) {
-		return "", errors.New("skip packet")
-	}
-	return "", nil
 }
 
-func (d *HttpDecoder) parseRequest(msg *HttpReq) error {
+func (d *HttpDecoder) decodeHttp() (HttpMsg, error) {
+	var err error
+	var msg HttpMsg
+	if d.buf.Bytes()[0] == 72 && d.buf.Bytes()[1] == 84 { // starts with HT
+		msg, err = d.parseResponse()
+	} else {
+		msg, err = d.parseRequest()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if !d.filter.IsEmpty() && !msg.Match(d.filter) {
+		return nil, SkipError
+	}
+	return msg, nil
+}
+
+func (d *HttpDecoder) parseRequest() (*HttpReq, error) {
 	var line string
 	var err error
+	msg := new(HttpReq)
 	line, err = d.buf.ReadString('\n')
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// parse first line
 	line = line[:len(line)-2] // remove \r\n
@@ -121,28 +179,42 @@ func (d *HttpDecoder) parseRequest(msg *HttpReq) error {
 	msg.url = strings.TrimSpace(result[1])
 	msg.version = strings.TrimSpace(result[2])
 	msg.headers = make(map[string]string)
-	return nil
+	if err = msg.parseHeader(d.buf); err != nil {
+		return nil, err
+	}
+	if err = msg.parseBody(d.buf); err != nil {
+		return nil, err
+	}
+	return msg, nil
 }
 
-func (d *HttpDecoder) parseResponse(msg *HttpResp) error {
+func (d *HttpDecoder) parseResponse() (*HttpResp, error) {
 	var line string
 	var err error
+	msg := new(HttpResp)
 	line, err = d.buf.ReadString('\n')
 	if err != nil {
-		return err
+		return nil, err
 	}
 	line = line[:len(line)-2] // remove \r\n
 	result := strings.Split(line, " ")
 	msg.version = strings.TrimSpace(result[0])
 	msg.statusCode, err = strconv.Atoi(strings.TrimSpace(result[1]))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	msg.statusMsg = strings.TrimSpace(result[2])
 	msg.headers = make(map[string]string)
-	return nil
+	if err = msg.parseHeader(d.buf); err != nil {
+		return nil, err
+	}
+	if err = msg.parseBody(d.buf); err != nil {
+		return nil, err
+	}
+	return msg, nil
 }
 
 func NewHttpDecoder(filterStr string) *HttpDecoder {
-	return &HttpDecoder{buf: bytes.NewBuffer([]byte{}), filter: NewHttpFilter(filterStr)}
+	return &HttpDecoder{buf: bytes.NewBuffer([]byte{}),
+		filter: NewHttpFilter(filterStr)}
 }

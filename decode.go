@@ -5,6 +5,8 @@ import (
 	_ "log"
 )
 
+var SkipError = errors.New("skip packet")
+
 type Decoder interface {
 	Decode([]byte) (string, error)
 }
