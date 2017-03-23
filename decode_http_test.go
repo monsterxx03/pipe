@@ -31,14 +31,18 @@ func TestDecodeHttpResp(t *testing.T) {
 	assertEqual(t, string(resp.body), "Hello World")
 }
 
-func TestHttpReqFilterUrl(t *testing.T) {
-	decoder := NewHttpDecoder("url: /test")
-	data := []byte("POST /tes/haha HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\n\r\nHello\r\n")
-	decoder.write(data)
+func TestHttpReqFilter(t *testing.T) {
+	decoder := NewHttpDecoder("url: /test & method: POST")
+	decoder.write([]byte("POST /tes/haha HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\n\r\nHello\r\n"))
 	// url not match
 	msg, err := decoder.decodeHttp()
 	assertEqual(t, msg, nil)
 	assertEqual(t, err, SkipError)
+
+	// match
+	decoder.write([]byte("POST /test/haha HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\n\r\nHello\r\n"))
+	msg, err = decoder.decodeHttp()
+	assertEqual(t, err, nil)
 }
 
 func TestHttpRespFilter(t *testing.T) {

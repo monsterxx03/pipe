@@ -77,7 +77,8 @@ type HttpReq struct {
 }
 
 func (m *HttpReq) Match(filter *HttpFilter) bool {
-	filters := filter.filters
+	filters := make(map[string]*regexp.Regexp)
+	MapCopy(filters, filter.filters)
 	if _, ok := filters["method"]; ok && !filters["method"].MatchString(m.method) {
 		return false
 	}
@@ -108,7 +109,8 @@ type HttpResp struct {
 }
 
 func (m *HttpResp) Match(filter *HttpFilter) bool {
-	filters := filter.filters
+	filters := make(map[string]*regexp.Regexp)
+	MapCopy(filters, filter.filters)
 	if _, ok := filters["version"]; ok && !filters["version"].MatchString(m.version) {
 		return false
 	}

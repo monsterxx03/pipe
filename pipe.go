@@ -139,7 +139,9 @@ func handlePacket(conn net.Conn, packet gopacket.Packet, localPort string) {
 
 			if aL := packet.ApplicationLayer(); aL != nil {
 				if data, err := decoder.Decode(aL.Payload()); err != nil {
-					log.Println("Failed to decode:", err)
+					if err != SkipError {
+						log.Println("Failed to decode:", err)
+					}
 				} else {
 					log.Printf("%v %q\n", direction, data)
 					if localFile != nil {
