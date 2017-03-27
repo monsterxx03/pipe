@@ -8,11 +8,6 @@ import (
 	"strings"
 )
 
-type HttpDecoder struct {
-	buf    *bytes.Buffer
-	filter *HttpFilter
-}
-
 type HttpMsg interface {
 	Match(f *HttpFilter) bool
 }
@@ -20,6 +15,7 @@ type HttpMsg interface {
 type HttpMixin struct {
 	headers map[string]string
 	body    []byte
+	rawMsg  []byte
 }
 
 func (m *HttpMixin) parseHeader(buf *bytes.Buffer) error {
@@ -46,6 +42,10 @@ func (m *HttpMixin) parseBody(buf *bytes.Buffer) error {
 	copy(m.body, buf.Bytes())
 	buf.Reset()
 	return nil
+}
+
+func (m HttpMixin) String() string {
+	return string(m.rawMsg)
 }
 
 func matchHeaders(rules map[string]*regexp.Regexp, headers map[string]string) bool {
@@ -133,6 +133,11 @@ func (m *HttpResp) Match(filter *HttpFilter) bool {
 	return true
 }
 
+type HttpDecoder struct {
+	buf    *bytes.Buffer
+	filter *HttpFilter
+}
+
 func (d *HttpDecoder) Decode(data []byte) (string, error) {
 	d.write(data)
 	if msg, err := d.decodeHttp(); err != nil {
@@ -170,6 +175,8 @@ func (d *HttpDecoder) parseRequest() (*HttpReq, error) {
 	var line string
 	var err error
 	msg := new(HttpReq)
+	msg.rawMsg = make([]byte, len(d.buf.Bytes()))
+	copy(msg.rawMsg, d.buf.Bytes())
 	line, err = d.buf.ReadString('\n')
 	if err != nil {
 		return nil, err
@@ -194,6 +201,8 @@ func (d *HttpDecoder) parseResponse() (*HttpResp, error) {
 	var line string
 	var err error
 	msg := new(HttpResp)
+	msg.rawMsg = make([]byte, len(d.buf.Bytes()))
+	copy(msg.rawMsg, d.buf.Bytes())
 	line, err = d.buf.ReadString('\n')
 	if err != nil {
 		return nil, err

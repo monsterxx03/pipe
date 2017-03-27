@@ -26,6 +26,6 @@ Decode redis traffic on port 6379 and write decoded msg to local file
 
     pipe -p 6379 -d redis -w result.txt
 
-Decode http traffic on port 80 with filter
+Decode http traffic on port 80 with filter(fitler value should be valid golang regexp):
 
-    pipe -p 80 -d http -f "method: GET & url /hello"
+    pipe -p 80 -d http -f "method: POST & url: /hello & Content-Type: application/json"
