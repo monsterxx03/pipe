@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -126,7 +127,7 @@ func handlePacket(packet gopacket.Packet, localPort string) {
 
 			if aL := packet.ApplicationLayer(); aL != nil {
 				if data, err := decoder.Decode(aL.Payload()); err != nil {
-					if err != SkipError {
+					if err != SkipError && err != io.EOF {
 						log.Println("Failed to decode:", err)
 					}
 				} else {
