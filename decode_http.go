@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type HttpMsg interface {
@@ -38,9 +39,15 @@ func (m *HttpMixin) parseHeader(buf *bytes.Buffer) error {
 }
 
 func (m *HttpMixin) parseBody(buf *bytes.Buffer) error {
-	m.body = make([]byte, len(buf.Bytes()))
-	copy(m.body, buf.Bytes())
-	buf.Reset()
+	length, ok := m.headers["Content-Length"]
+	if ok {
+		bodyLength, _ := strconv.Atoi(length)
+		m.body = make([]byte, bodyLength)
+		copy(m.body, buf.Bytes())
+		buf.Read(make([]byte, bodyLength))
+	} else {
+		buf.Reset()
+	}
 	return nil
 }
 
@@ -134,15 +141,22 @@ func (m *HttpResp) Match(filter *HttpFilter) bool {
 }
 
 type HttpDecoder struct {
+	lock   sync.Mutex
 	buf    *bytes.Buffer
 	filter *HttpFilter
 }
 
 func (d *HttpDecoder) Decode(data []byte) (string, error) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
 	d.write(data)
 	if msg, err := d.decodeHttp(); err != nil {
 		return "", err
 	} else {
+		if len(d.buf.Bytes()) > 0 {
+			fmt.Println(string(d.buf.Bytes()))
+		}
 		return fmt.Sprintf("%v", msg), nil
 	}
 }

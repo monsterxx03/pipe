@@ -21,8 +21,8 @@ var (
 	udp         = flag.Bool("u", false, "Capture udp protocol")
 	writeToFile = flag.String("w", "", "Write payload to file")
 	filterStr   = flag.String("f", "", "used to parse msg")
+	silence     = flag.Bool("s", false, "silence output")
 	allDevices  []pcap.Interface
-	mode        string   = "decode" // decode or mirror
 	localFile   *os.File = nil
 	decoder     Decoder  = nil
 	conn        net.Conn = nil
@@ -90,14 +90,12 @@ func InitCli() {
 	flag.Parse()
 	var err error
 	if *decodeAs != "" {
-		mode = "decode"
 		decoder, err = getDecoder(*decodeAs, *filterStr)
-	} else {
-		if *to == "" {
-			log.Fatal("Must provide -t or -d")
+		if err != nil {
+			panic(err)
 		}
-		log.Println("mirror:" + *to)
-		mode = "mirror"
+	} else if *to == "" {
+		panic("Need -d or -t must be provided at least one")
 	}
 	if *writeToFile != "" {
 		localFile, err = os.OpenFile(*writeToFile, os.O_RDWR|os.O_CREATE, 0644)
@@ -114,7 +112,8 @@ func handlePacket(packet gopacket.Packet, localPort string) {
 			debug.PrintStack()
 		}
 	}()
-	if mode == "decode" {
+	if decoder != nil {
+		// if decoder and filter exist, need to decode transport payload to do filter, else just mirror to remote
 		if net := packet.TransportLayer(); net != nil {
 			// decode transport layer to get port info
 			var direction string
@@ -126,12 +125,18 @@ func handlePacket(packet gopacket.Packet, localPort string) {
 			}
 
 			if aL := packet.ApplicationLayer(); aL != nil {
-				if data, err := decoder.Decode(aL.Payload()); err != nil {
+				payload := aL.Payload()
+				if data, err := decoder.Decode(payload); err != nil {
 					if err != SkipError && err != io.EOF {
 						log.Println("Failed to decode:", err)
 					}
 				} else {
-					log.Printf("%v %q\n", direction, data)
+					if !*silence {
+						log.Printf("%v %q\n", direction, data)
+					}
+					if *to != "" {
+						writeToRemote(payload)
+					}
 					if localFile != nil {
 						writePayload([]byte(data))
 					}
@@ -141,11 +146,11 @@ func handlePacket(packet gopacket.Packet, localPort string) {
 	} else {
 		// mirror to remote
 		if aL := packet.ApplicationLayer(); aL != nil {
-			data := aL.Payload()
+			payload := aL.Payload()
 			if localFile != nil {
-				writePayload(data)
+				writePayload(payload)
 			}
-			writeToRemote(data)
+			writeToRemote(payload)
 		}
 	}
 }

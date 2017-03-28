@@ -6,7 +6,7 @@ import (
 
 func TestDecodeHttpReq(t *testing.T) {
 	decoder := NewHttpDecoder("")
-	data := []byte("POST /test HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\n\r\nHello\r\n")
+	data := []byte("POST /test HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\nContent-Length: 5\r\n\r\nHello")
 	decoder.write(data)
 	msg, err := decoder.decodeHttp()
 	assertEqual(t, err, nil)
@@ -15,12 +15,12 @@ func TestDecodeHttpReq(t *testing.T) {
 	assertEqual(t, req.url, "/test")
 	assertEqual(t, req.headers["Host"], "google.com")
 	assertEqual(t, req.headers["User-Agent"], "curl")
-	assertEqual(t, string(req.body), "Hello\r\n")
+	assertEqual(t, string(req.body), "Hello")
 }
 
 func TestDecodeHttpResp(t *testing.T) {
 	decoder := NewHttpDecoder("")
-	data := []byte("HTTP/1.1 200 OK\r\nHost: google.com\r\n\r\nHello World")
+	data := []byte("HTTP/1.1 200 OK\r\nContent-Length:11\r\nHost: google.com\r\n\r\nHello World")
 	decoder.write(data)
 	msg, err := decoder.decodeHttp()
 	assertEqual(t, err, nil)
