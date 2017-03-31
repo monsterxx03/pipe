@@ -18,7 +18,6 @@ var (
 	to          = flag.String("t", "", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
 	traceResp   = flag.Bool("r", false, "Whether to trace response traffic")
 	decodeAs    = flag.String("d", "", "parse payload, support decoder: ascii, redis, mysql")
-	udp         = flag.Bool("u", false, "Capture udp protocol")
 	writeToFile = flag.String("w", "", "Write payload to file")
 	filterStr   = flag.String("f", "", "used to parse msg")
 	silence     = flag.Bool("s", false, "silence output")
@@ -29,13 +28,8 @@ var (
 )
 
 // eg: tcp port 80 and (host addr1 or host add2)
-func buildBPFFilter(traceResp bool, udp bool, localIps []string, localPort string) string {
-	result := ""
-	if udp {
-		result += "udp "
-	} else {
-		result += "tcp "
-	}
+func buildBPFFilter(traceResp bool, localIps []string, localPort string) string {
+	result := "tcp "
 	if traceResp {
 		result += "port " + localPort
 	} else {
@@ -189,11 +183,7 @@ func writeToRemote(data []byte) {
 func getConnection(force bool) (net.Conn, error) {
 	var err error
 	if conn == nil || force {
-		if *udp {
-			conn, err = net.Dial("udp", *to)
-		} else {
-			conn, err = net.Dial("tcp", *to)
-		}
+		conn, err = net.Dial("tcp", *to)
 		if err != nil {
 			return nil, err
 		}
@@ -228,7 +218,7 @@ func main() {
 				return
 			}
 
-			if err = handle.SetBPFFilter(buildBPFFilter(*traceResp, *udp, localIps, *localPort)); err != nil {
+			if err = handle.SetBPFFilter(buildBPFFilter(*traceResp, localIps, *localPort)); err != nil {
 				log.Println("Failed to set BPF for:" + d.Name)
 				wg.Done()
 				return
