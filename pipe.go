@@ -137,6 +137,8 @@ func (s *stream) run() {
 			data, err := decoder.Decode()
 			if err == io.EOF {
 				return
+			} else if err == SkipError {
+				continue
 			} else if err != nil {
 				log.Println(err)
 			} else {

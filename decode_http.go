@@ -74,6 +74,14 @@ type HttpReq struct {
 	HttpMixin
 }
 
+func (m *HttpReq) String() string {
+	headStr := ""
+	for k, v := range m.headers {
+		headStr += k + ": " + v + "\r\n"
+	}
+	return fmt.Sprintf("%s %s %s\r\n%s\r\n%s", m.method, m.url, m.version, headStr, string(m.body))
+}
+
 func (m *HttpReq) Match(filter *HttpFilter) bool {
 	filters := make(map[string]*regexp.Regexp)
 	MapCopy(filters, filter.filters)
@@ -104,6 +112,14 @@ type HttpResp struct {
 	statusCode int
 	statusMsg  string
 	HttpMixin
+}
+
+func (m *HttpResp) String() string {
+	headStr := ""
+	for k, v := range m.headers {
+		headStr += k + ": " + v + "\r\n"
+	}
+	return fmt.Sprintf("%s %s %s\r\n%s\r\n%s", m.version, m.statusCode, m.statusMsg, headStr, string(m.body))
 }
 
 func (m *HttpResp) Match(filter *HttpFilter) bool {
