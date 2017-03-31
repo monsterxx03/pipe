@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"testing"
 )
 
 func TestDecodeHttpReq(t *testing.T) {
 	decoder := NewHttpDecoder("")
 	data := []byte("POST /test HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\nContent-Length: 5\r\n\r\nHello")
-	decoder.write(data)
+	r := bufio.NewReader(bytes.NewReader(data))
+	decoder.SetReader(r)
 	msg, err := decoder.decodeHttp()
 	assertEqual(t, err, nil)
 	req := msg.(*HttpReq)
@@ -21,7 +24,8 @@ func TestDecodeHttpReq(t *testing.T) {
 func TestDecodeHttpResp(t *testing.T) {
 	decoder := NewHttpDecoder("")
 	data := []byte("HTTP/1.1 200 OK\r\nContent-Length:11\r\nHost: google.com\r\n\r\nHello World")
-	decoder.write(data)
+	r := bufio.NewReader(bytes.NewReader(data))
+	decoder.SetReader(r)
 	msg, err := decoder.decodeHttp()
 	assertEqual(t, err, nil)
 	resp := msg.(*HttpResp)
@@ -33,14 +37,18 @@ func TestDecodeHttpResp(t *testing.T) {
 
 func TestHttpReqFilter(t *testing.T) {
 	decoder := NewHttpDecoder("url: /test & method: POST")
-	decoder.write([]byte("POST /tes/haha HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\n\r\nHello\r\n"))
+	data := []byte("POST /tes/haha HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\n\r\nHello\r\n")
+	r := bufio.NewReader(bytes.NewReader(data))
+	decoder.SetReader(r)
 	// url not match
 	msg, err := decoder.decodeHttp()
 	assertEqual(t, msg, nil)
 	assertEqual(t, err, SkipError)
 
 	// match
-	decoder.write([]byte("POST /test/haha HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\n\r\nHello\r\n"))
+	data = []byte("POST /test/haha HTTP/1.1\r\nHost: google.com\r\nUser-Agent:curl\r\n\r\nHello\r\n")
+	r = bufio.NewReader(bytes.NewReader(data))
+	decoder.SetReader(r)
 	msg, err = decoder.decodeHttp()
 	assertEqual(t, err, nil)
 }

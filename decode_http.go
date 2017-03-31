@@ -1,30 +1,28 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 )
 
-type HttpMsg interface {
-	Match(f *HttpFilter) bool
-}
+type HttpMsg interface{}
 
 type HttpMixin struct {
 	headers map[string]string
 	body    []byte
-	rawMsg  []byte
 }
 
-func (m *HttpMixin) parseHeader(buf *bytes.Buffer) error {
+func (m *HttpMixin) parseHeader(reader *bufio.Reader) error {
 	var err error
 	var line string
+	m.headers = make(map[string]string)
 	for {
 		// parse headers
-		if line, err = buf.ReadString('\n'); err != nil {
+		if line, err = reader.ReadString('\n'); err != nil {
 			return err
 		}
 		if line == "\r\n" {
@@ -33,26 +31,19 @@ func (m *HttpMixin) parseHeader(buf *bytes.Buffer) error {
 		}
 		line = line[:len(line)-2] // remove \r\n
 		result := strings.SplitN(line, ":", 2)
-		m.headers[result[0]] = strings.TrimSpace(result[1])
+		m.headers[strings.TrimSpace(result[0])] = strings.TrimSpace(result[1])
 	}
 	return nil
 }
 
-func (m *HttpMixin) parseBody(buf *bytes.Buffer) error {
+func (m *HttpMixin) parseBody(reader *bufio.Reader) error {
 	length, ok := m.headers["Content-Length"]
 	if ok {
-		bodyLength, _ := strconv.Atoi(length)
-		m.body = make([]byte, bodyLength)
-		copy(m.body, buf.Bytes())
-		buf.Read(make([]byte, bodyLength))
-	} else {
-		buf.Reset()
+		bodyLen, _ := strconv.Atoi(length)
+		m.body = make([]byte, bodyLen)
+		reader.Read(m.body)
 	}
 	return nil
-}
-
-func (m HttpMixin) String() string {
-	return string(m.rawMsg)
 }
 
 func matchHeaders(rules map[string]*regexp.Regexp, headers map[string]string) bool {
@@ -141,105 +132,71 @@ func (m *HttpResp) Match(filter *HttpFilter) bool {
 }
 
 type HttpDecoder struct {
-	lock   sync.Mutex
-	buf    *bytes.Buffer
+	r      *bufio.Reader
 	filter *HttpFilter
 }
 
-func (d *HttpDecoder) Decode(data []byte) (string, error) {
-	d.lock.Lock()
-	defer d.lock.Unlock()
+func (d *HttpDecoder) SetReader(r *bufio.Reader) {
+	d.r = r
+}
 
-	d.write(data)
+func (d *HttpDecoder) Decode() (string, error) {
 	if msg, err := d.decodeHttp(); err != nil {
 		return "", err
 	} else {
-		if len(d.buf.Bytes()) > 0 {
-			fmt.Println(string(d.buf.Bytes()))
-		}
 		return fmt.Sprintf("%v", msg), nil
 	}
 }
 
-func (d *HttpDecoder) write(data []byte) {
-	if len(data) > 0 {
-		d.buf.Write(data)
-	}
-}
-
 func (d *HttpDecoder) decodeHttp() (HttpMsg, error) {
-	var err error
-	var msg HttpMsg
-	if d.buf.Bytes()[0] == 72 && d.buf.Bytes()[1] == 84 { // starts with HT
-		msg, err = d.parseResponse()
+	isReq := true
+	firstLine, err := d.r.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+	firstLine = firstLine[:len(firstLine)-2]
+	f := strings.SplitN(firstLine, " ", 3)
+	fLen := len(f)
+	if fLen < 3 {
+		return nil, errors.New("bad http msg: " + firstLine)
+	} else if fLen == 3 {
+		if f[0][:2] == "HT" { // eg: HTTP/1.1 200 OK
+			isReq = false
+		}
 	} else {
-		msg, err = d.parseRequest()
+		isReq = false
 	}
-	if err != nil {
-		return nil, err
+	if isReq {
+		// it's http request
+		req := new(HttpReq)
+		req.method = f[0]
+		req.url = f[1]
+		req.version = f[2]
+		req.parseHeader(d.r)
+		req.parseBody(d.r)
+		if !d.filter.IsEmpty() && !req.Match(d.filter) {
+			return nil, SkipError
+		}
+		return req, nil
+	} else {
+		// it's http response
+		resp := new(HttpResp)
+		resp.version = f[0]
+		resp.statusCode, err = strconv.Atoi(f[1])
+		if err != nil {
+			return nil, errors.New("Invalid http resp: " + firstLine)
+		}
+		resp.statusMsg = f[2]
+		resp.parseHeader(d.r)
+		resp.parseBody(d.r)
+		if !d.filter.IsEmpty() && !resp.Match(d.filter) {
+			return nil, SkipError
+		}
+		return resp, nil
 	}
-
-	if !d.filter.IsEmpty() && !msg.Match(d.filter) {
-		return nil, SkipError
-	}
-	return msg, nil
-}
-
-func (d *HttpDecoder) parseRequest() (*HttpReq, error) {
-	var line string
-	var err error
-	msg := new(HttpReq)
-	msg.rawMsg = make([]byte, len(d.buf.Bytes()))
-	copy(msg.rawMsg, d.buf.Bytes())
-	line, err = d.buf.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
-	// parse first line
-	line = line[:len(line)-2] // remove \r\n
-	result := strings.Split(line, " ")
-	msg.method = strings.TrimSpace(result[0])
-	msg.url = strings.TrimSpace(result[1])
-	msg.version = strings.TrimSpace(result[2])
-	msg.headers = make(map[string]string)
-	if err = msg.parseHeader(d.buf); err != nil {
-		return nil, err
-	}
-	if err = msg.parseBody(d.buf); err != nil {
-		return nil, err
-	}
-	return msg, nil
-}
-
-func (d *HttpDecoder) parseResponse() (*HttpResp, error) {
-	var line string
-	var err error
-	msg := new(HttpResp)
-	msg.rawMsg = make([]byte, len(d.buf.Bytes()))
-	copy(msg.rawMsg, d.buf.Bytes())
-	line, err = d.buf.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
-	line = line[:len(line)-2] // remove \r\n
-	result := strings.Split(line, " ")
-	msg.version = strings.TrimSpace(result[0])
-	msg.statusCode, err = strconv.Atoi(strings.TrimSpace(result[1]))
-	if err != nil {
-		return nil, err
-	}
-	msg.statusMsg = strings.TrimSpace(result[2])
-	msg.headers = make(map[string]string)
-	if err = msg.parseHeader(d.buf); err != nil {
-		return nil, err
-	}
-	if err = msg.parseBody(d.buf); err != nil {
-		return nil, err
-	}
-	return msg, nil
 }
 
 func NewHttpDecoder(filterStr string) *HttpDecoder {
-	return &HttpDecoder{buf: bytes.NewBuffer([]byte{}),
+	return &HttpDecoder{
 		filter: NewHttpFilter(filterStr)}
 }

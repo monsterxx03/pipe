@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
 	_ "log"
 	"strconv"
@@ -17,7 +17,11 @@ const (
 )
 
 type RedisDecoder struct {
-	buf bytes.Buffer
+	r *bufio.Reader
+}
+
+func (d *RedisDecoder) SetReader(r *bufio.Reader) {
+	d.r = r
 }
 
 type RedisMsg interface{}
@@ -26,10 +30,7 @@ func NewRedisDecoder(filterStr string) *RedisDecoder {
 	return new(RedisDecoder)
 }
 
-func (d *RedisDecoder) Decode(data []byte) (string, error) {
-	if len(data) > 1 {
-		d.buf.Write(data)
-	}
+func (d *RedisDecoder) Decode() (string, error) {
 	if result, err := d.decodeRedisMsg(); err != nil {
 		return "", err
 	} else {
@@ -53,7 +54,7 @@ func (d *RedisDecoder) Decode(data []byte) (string, error) {
 }
 
 func (d *RedisDecoder) decodeRedisMsg() (RedisMsg, error) {
-	line, err := d.buf.ReadString('\n')
+	line, err := d.r.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
@@ -78,7 +79,7 @@ func (d *RedisDecoder) decodeRedisMsg() (RedisMsg, error) {
 		if strLen == -1 {
 			return nil, nil
 		}
-		line, _ = d.buf.ReadString('\n')
+		line, _ = d.r.ReadString('\n')
 		return line[:len(line)-2], nil
 	case respArray:
 		arrayLen, err := strconv.Atoi(resp)
@@ -91,7 +92,7 @@ func (d *RedisDecoder) decodeRedisMsg() (RedisMsg, error) {
 		}
 		result := make([]RedisMsg, arrayLen)
 		for i := 0; i < arrayLen; i++ {
-			if result[i], err = d.Decode([]byte{}); err != nil {
+			if result[i], err = d.Decode(); err != nil {
 				return "", err
 			}
 		}

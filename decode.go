@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	_ "log"
 )
@@ -8,15 +9,20 @@ import (
 var SkipError = errors.New("skip packet")
 
 type Decoder interface {
-	Decode([]byte) (string, error)
+	Decode() (string, error)
+	SetReader(r *bufio.Reader)
 }
 
 type AsciiDecoder struct {
-	data []byte
+	r *bufio.Reader
 }
 
-func (d *AsciiDecoder) Decode(data []byte) (string, error) {
-	return string(data), nil
+func (d *AsciiDecoder) Decode() (string, error) {
+	return "Test", nil
+}
+
+func (d *AsciiDecoder) SetReader(r *bufio.Reader) {
+	d.r = r
 }
 
 func getDecoder(decodeAs, filterStr string) (Decoder, error) {

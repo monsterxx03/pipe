@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"testing"
 )
 
 func checkRedisCmd(t *testing.T, data []byte, expected string) {
 	decoder := NewRedisDecoder("")
-	result, err := decoder.Decode(data)
+	r := bufio.NewReader(bytes.NewReader(data))
+	decoder.SetReader(r)
+	result, err := decoder.Decode()
 	if err != nil {
 		t.Error(err)
 	}

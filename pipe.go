@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"io"
 	"log"
@@ -10,7 +11,10 @@ import (
 	"sync"
 
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/tcpassembly"
+	"github.com/google/gopacket/tcpassembly/tcpreader"
 )
 
 var (
@@ -99,52 +103,45 @@ func InitCli() {
 	}
 }
 
-func handlePacket(packet gopacket.Packet, localPort string) {
+type tcpStreamFactory struct{}
+
+// httpStream will handle the actual decoding of http requests.
+type stream struct {
+	net, transport gopacket.Flow
+	r              tcpreader.ReaderStream
+}
+
+func (s *tcpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream {
+	stream := &stream{
+		net:       net,
+		transport: transport,
+		r:         tcpreader.NewReaderStream(),
+	}
+	go stream.run() // Important... we must guarantee that data from the reader stream is read.
+
+	// ReaderStream implements tcpassembly.Stream, so we can return a pointer to it.
+	return &stream.r
+}
+
+func (s *stream) run() {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("recovered in handlePacket:", r)
 			debug.PrintStack()
 		}
 	}()
-	if decoder != nil {
-		// if decoder and filter exist, need to decode transport payload to do filter, else just mirror to remote
-		if net := packet.TransportLayer(); net != nil {
-			// decode transport layer to get port info
-			var direction string
-			srcPort, _ := net.TransportFlow().Endpoints()
-			if srcPort.String() == localPort {
-				direction = "resp:\n"
+	buf := bufio.NewReader(&s.r)
+	for {
+		if decoder != nil {
+			decoder.SetReader(buf)
+			data, err := decoder.Decode()
+			if err == io.EOF {
+				return
+			} else if err != nil {
+				log.Println(err)
 			} else {
-				direction = "req:\n"
+				log.Println(data)
 			}
-
-			if aL := packet.ApplicationLayer(); aL != nil {
-				payload := aL.Payload()
-				if data, err := decoder.Decode(payload); err != nil {
-					if err != SkipError && err != io.EOF {
-						log.Println("Failed to decode:", err)
-					}
-				} else {
-					if !*silence {
-						log.Printf("%v %q\n", direction, data)
-					}
-					if *to != "" {
-						writeToRemote(payload)
-					}
-					if localFile != nil {
-						writePayload([]byte(data))
-					}
-				}
-			}
-		}
-	} else {
-		// mirror to remote
-		if aL := packet.ApplicationLayer(); aL != nil {
-			payload := aL.Payload()
-			if localFile != nil {
-				writePayload(payload)
-			}
-			writeToRemote(payload)
 		}
 	}
 }
@@ -224,9 +221,15 @@ func main() {
 				return
 			}
 
+			// make tcpassembler
 			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+			streamFactory := &tcpStreamFactory{}
+			streamPool := tcpassembly.NewStreamPool(streamFactory)
+			assembler := tcpassembly.NewAssembler(streamPool)
+
 			for packet := range packetSource.Packets() {
-				handlePacket(packet, *localPort)
+				tcp := packet.TransportLayer().(*layers.TCP)
+				assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
 			}
 			wg.Done()
 		}(dev)
