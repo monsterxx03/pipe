@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	_ "log"
 )
@@ -18,7 +19,9 @@ type AsciiDecoder struct {
 }
 
 func (d *AsciiDecoder) Decode() (string, error) {
-	return "Test", nil
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(d.r)
+	return buf.String(), nil
 }
 
 func (d *AsciiDecoder) SetReader(r *bufio.Reader) {

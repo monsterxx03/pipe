@@ -2,10 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"io"
 	"log"
-	"net"
 	"os"
 	"runtime/debug"
 	"sync"
@@ -18,17 +18,15 @@ import (
 )
 
 var (
-	localPort   = flag.String("p", "80", "Local port to capture traffic")
-	to          = flag.String("t", "", "Address to send traffic, stdout, 127.0.0.1:8080 ....")
-	traceResp   = flag.Bool("r", false, "Whether to trace response traffic")
-	decodeAs    = flag.String("d", "", "parse payload, support decoder: ascii, redis, mysql")
-	writeToFile = flag.String("w", "", "Write payload to file")
-	filterStr   = flag.String("f", "", "used to parse msg")
-	silence     = flag.Bool("s", false, "silence output")
-	allDevices  []pcap.Interface
-	localFile   *os.File = nil
-	decoder     Decoder  = nil
-	conn        net.Conn = nil
+	localPort    = flag.String("p", "80", "Local port to capture traffic")
+	traceResp    = flag.Bool("r", false, "Whether to trace response traffic")
+	decodeAs     = flag.String("d", "", "parse payload, support decoder: ascii, redis, http")
+	writeToFile  = flag.String("w", "", "Write payload to file")
+	filterStr    = flag.String("f", "", "used to parse msg")
+	silence      = flag.Bool("s", false, "silence output")
+	enableStream = flag.Bool("stream", false, "track packet in stream mode(via tcpassembly)")
+	allDevices   []pcap.Interface
+	localFile    *os.File = nil
 )
 
 // eg: tcp port 80 and (host addr1 or host add2)
@@ -87,14 +85,6 @@ func getAllIps(dev pcap.Interface) []string {
 func InitCli() {
 	flag.Parse()
 	var err error
-	if *decodeAs != "" {
-		decoder, err = getDecoder(*decodeAs, *filterStr)
-		if err != nil {
-			panic(err)
-		}
-	} else if *to == "" {
-		panic("Need -d or -t must be provided at least one")
-	}
 	if *writeToFile != "" {
 		localFile, err = os.OpenFile(*writeToFile, os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
@@ -126,24 +116,51 @@ func (s *tcpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream 
 func (s *stream) run() {
 	defer func() {
 		if r := recover(); r != nil {
+			log.Println("recovered in stream run:", r)
+			debug.PrintStack()
+		}
+	}()
+	reader := bufio.NewReader(&s.r)
+	decoder, err := getDecoder(*decodeAs, *filterStr)
+	if err != nil {
+		panic(err)
+	}
+	decoder.SetReader(reader)
+	for {
+		data, err := decoder.Decode()
+		if err == io.EOF {
+			return
+		} else if err == SkipError {
+			continue
+		} else if err != nil {
+			log.Println(err)
+		} else {
+			log.Println(data)
+		}
+	}
+}
+
+func handlePacket(packet gopacket.Packet) {
+	defer func() {
+		if r := recover(); r != nil {
 			log.Println("recovered in handlePacket:", r)
 			debug.PrintStack()
 		}
 	}()
-	buf := bufio.NewReader(&s.r)
-	for {
-		if decoder != nil {
-			decoder.SetReader(buf)
-			data, err := decoder.Decode()
-			if err == io.EOF {
-				return
-			} else if err == SkipError {
-				continue
-			} else if err != nil {
-				log.Println(err)
-			} else {
-				log.Println(data)
-			}
+	if app := packet.ApplicationLayer(); app != nil {
+		reader := bufio.NewReader(bytes.NewReader(app.Payload()))
+		decoder, err := getDecoder(*decodeAs, *filterStr)
+		if err != nil {
+			panic(err)
+		}
+		decoder.SetReader(reader)
+		data, err := decoder.Decode()
+		if err == io.EOF || err == SkipError {
+			return
+		} else if err != nil {
+			log.Println(err)
+		} else {
+			log.Println(data)
 		}
 	}
 }
@@ -157,37 +174,6 @@ func writePayload(data []byte) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func writeToRemote(data []byte) {
-	forceNew := false
-	if len(data) > 0 {
-		for i := 0; i < 3; i++ {
-			conn, err := getConnection(forceNew)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-			_, err = conn.Write(data)
-			if err != nil {
-				log.Println(err)
-				forceNew = true
-				continue
-			}
-			break
-		}
-	}
-}
-
-func getConnection(force bool) (net.Conn, error) {
-	var err error
-	if conn == nil || force {
-		conn, err = net.Dial("tcp", *to)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return conn, nil
 }
 
 func main() {
@@ -223,15 +209,23 @@ func main() {
 				return
 			}
 
-			// make tcpassembler
 			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-			streamFactory := &tcpStreamFactory{}
-			streamPool := tcpassembly.NewStreamPool(streamFactory)
-			assembler := tcpassembly.NewAssembler(streamPool)
+			// make tcpassembler
+			var assembler *tcpassembly.Assembler
+			if *enableStream {
+				streamFactory := &tcpStreamFactory{}
+				streamPool := tcpassembly.NewStreamPool(streamFactory)
+				assembler = tcpassembly.NewAssembler(streamPool)
+			}
 
 			for packet := range packetSource.Packets() {
-				tcp := packet.TransportLayer().(*layers.TCP)
-				assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
+				if *enableStream {
+					tcp := packet.TransportLayer().(*layers.TCP)
+					assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
+				} else {
+					// handle packet one by one
+					handlePacket(packet)
+				}
 			}
 			wg.Done()
 		}(dev)
