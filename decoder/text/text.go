@@ -9,8 +9,9 @@ type Decoder struct {
 
 }
 
-func (d *Decoder) Decode(reader io.Reader, writer io.Writer) {
-	io.Copy(writer, reader)
+func (d *Decoder) Decode(reader io.Reader, writer io.Writer) error {
+	_, err := io.Copy(writer, reader)
+	return err
 }
 
 func (d *Decoder) SetFilter(filter string) {

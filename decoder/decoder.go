@@ -9,7 +9,7 @@ var DECODERS = map[string]Decoder{}
 
 
 type Decoder interface {
-	Decode(io.Reader, io.Writer)
+	Decode(io.Reader, io.Writer) error
 	SetFilter(string)
 }
 

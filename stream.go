@@ -21,7 +21,9 @@ func (s *Stream) Read(data []byte) (int, error) {
 
 
 func (s *Stream) To(w io.Writer) {
-	s.decoder.Decode(s.pr, w)
+	if err := s.decoder.Decode(s.pr, w) ; err != nil {
+		panic(err)
+	}
 }
 
 func NewStream(decoder decoder.Decoder) *Stream {

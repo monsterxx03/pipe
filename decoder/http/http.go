@@ -9,8 +9,8 @@ type Decoder struct {
 
 }
 
-func (d *Decoder) Decode(reader io.Reader, writer io.Writer) {
-
+func (d *Decoder) Decode(reader io.Reader, writer io.Writer) error {
+	return nil
 }
 
 func (d *Decoder) SetFilter(filter string) {
