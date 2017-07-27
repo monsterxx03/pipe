@@ -1,3 +1,4 @@
 package: github.com/monsterxx03/pipe
 import:
 - package: github.com/google/gopacket
+- package: github.com/juju/errors
