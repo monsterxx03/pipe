@@ -1,9 +1,11 @@
-hash: d411d3c2e64c47ecd58a4defd980813f83750a4a8d44c2d3ac207fd5fe0d075e
-updated: 2017-03-03T05:09:36.76255518Z
+hash: 1b30ed3e71bd4ab386b7d211f7890b3df291b0ead262d95b9c00782f6cd797f1
+updated: 2017-07-27T10:20:52.579153231Z
 imports:
 - name: github.com/google/gopacket
-  version: e3b37923d2d3d9cba7d45038a2be5656eccfe291
+  version: 8af772c0bcc826f671fd7c133917fec9686d720d
   subpackages:
   - layers
   - pcap
+- name: github.com/juju/errors
+  version: c7d06af17c68cd34c835053720b21f6549d9b0ee
 testImports: []
