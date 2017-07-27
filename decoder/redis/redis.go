@@ -16,8 +16,6 @@ const (
 )
 var NIL = []byte("nil")
 
-type RedisMsg interface{}
-
 type Decoder struct {
 	buf *bufio.Reader
 }

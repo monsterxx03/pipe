@@ -87,11 +87,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if *filterStr != "" {
-		d.SetFilter(*filterStr)
-	}
+	d.SetFilter(*filterStr)
+
 	s := NewStream(d)
 	go s.To(os.Stdout)
+
 	for _, dev := range allDevs {
 		// use one goroutine for every device
 		go func(d pcap.Interface) {
