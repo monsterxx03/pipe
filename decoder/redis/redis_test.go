@@ -1,20 +1,32 @@
-package main
+package redis
 
 import (
-	"bufio"
-	"bytes"
 	"testing"
+	"bytes"
+	"io"
+	"bufio"
 )
 
 func checkRedisCmd(t *testing.T, data []byte, expected string) {
-	decoder := NewRedisDecoder("")
-	r := bufio.NewReader(bytes.NewReader(data))
-	decoder.SetReader(r)
-	result, err := decoder.Decode()
+	decoder := Decoder{}
+	decoder.SetFilter("")
+	pr, pw := io.Pipe()
+	go func() {
+		err := decoder.Decode(bytes.NewReader(data), pw)
+		if err != nil && err != io.EOF {
+			t.Error(err)
+		}
+	}()
+
+	bufPr := bufio.NewReader(pr)
+	_data, err := bufPr.ReadString('\n')
 	if err != nil {
 		t.Error(err)
 	}
-	assertEqual(t, result, expected)
+	_data = _data[:len(_data)-1]
+	if string(_data) != expected {
+		t.Error("not equal")
+	}
 }
 
 func TestDecodeRedisMsgOK(t *testing.T) {

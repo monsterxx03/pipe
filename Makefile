@@ -8,4 +8,4 @@ clean:
 	test -f pipe && rm pipe || echo 'cleaned' 
 
 go_test:
-	go test
+	go test -v `go list  ./... | grep -v vendor`

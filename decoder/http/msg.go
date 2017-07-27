@@ -8,7 +8,7 @@ import (
 )
 
 type Http interface {
-	Match(*Filter)
+	Match(*Filter) bool
 	String() string
 }
 

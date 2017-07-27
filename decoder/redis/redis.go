@@ -47,7 +47,9 @@ func (d *Decoder) decodeRedisMsg() ([]byte, error) {
 	headerByte, resp := line[0], line[1:]
 	switch headerByte {
 	case respOK:
+		return resp, nil
 	case respERROR:
+		return resp, nil
 	case respInt:
 		return resp, nil
 	case respString:
@@ -73,7 +75,9 @@ func (d *Decoder) decodeRedisMsg() ([]byte, error) {
 		for i := 0; i < arrayLen; i++ {
 			tmp, _ := d.decodeRedisMsg()
 			result = append(result, tmp...)
-			result = append(result, byte(' '))
+			if i < arrayLen -1 {
+				result = append(result, byte(' '))
+			}
 		}
 		return result, nil
 	default:
