@@ -6,10 +6,10 @@ import (
 	"os"
 	"sync"
 
-	_ "github.com/monsterxx03/pipe/decoder/text"
-	_ "github.com/monsterxx03/pipe/decoder/redis"
-	_ "github.com/monsterxx03/pipe/decoder/http"
 	"github.com/monsterxx03/pipe/decoder"
+	_ "github.com/monsterxx03/pipe/decoder/http"
+	_ "github.com/monsterxx03/pipe/decoder/redis"
+	_ "github.com/monsterxx03/pipe/decoder/text"
 
 	"github.com/google/gopacket"
 	_ "github.com/google/gopacket/layers"
@@ -17,10 +17,11 @@ import (
 )
 
 var (
-	localPort = flag.String("p", "80", "Local port to capture traffic")
-	traceResp = flag.Bool("r", false, "Whether to trace response traffic")
-	decodeAs  = flag.String("d", "text", "parse payload, support decoder: text, redis, http")
-	filterStr = flag.String("f", "", "used to parse msg")
+	localPort  = flag.String("p", "80", "Local port to capture traffic")
+	traceResp  = flag.Bool("r", false, "Whether to trace response traffic")
+	decodeAs   = flag.String("d", "text", "parse payload, support decoder: text, redis, http")
+	deepDecode = flag.String("dd", "", "deep decode based on content type, works for http now, if -dd is provided, -d will be ignored")
+	filterStr  = flag.String("f", "", "used to parse msg")
 )
 
 // eg: tcp port 80 and (host addr1 or host add2)
@@ -83,7 +84,11 @@ func main() {
 	allDevs := getAlldevs()
 	wg.Add(len(allDevs) + 1)
 
-	d, err := decoder.GetDecoder(*decodeAs)
+	_decodeAs := *decodeAs
+	if *deepDecode != "" {
+		_decodeAs = *deepDecode
+	}
+	d, err := decoder.GetDecoder(_decodeAs)
 	if err != nil {
 		panic(err)
 	}

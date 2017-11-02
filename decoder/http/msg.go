@@ -1,17 +1,44 @@
 package http
 
 import (
+	"bytes"
 	"fmt"
-	"regexp"
+	"github.com/ugorji/go/codec"
 	"reflect"
+	"regexp"
 	"strconv"
 )
 
+var mh codec.MsgpackHandle
+
 type Http interface {
 	Match(*Filter) bool
-	String() string
+	StringHeader() string
+	DecodeBody() (string, error)
+	RawBody() []byte
 }
 
+func prettyPrint(v map[string]interface{}) {
+	for key, value := range v {
+		keyType := reflect.ValueOf(key).Kind()
+		valueType := reflect.ValueOf(value).Kind()
+	}
+}
+
+func decodeToString(contentType string, data []byte) (string, error) {
+	var v map[string]interface{}
+	switch contentType {
+	case "application/msgpack":
+		dec := codec.NewDecoder(bytes.NewReader(data), &mh)
+		err := dec.Decode(&v)
+		if err != nil {
+			return "", err
+		}
+		prettyPrint(v)
+		return fmt.Sprint(v), nil
+	}
+	return string(data), nil
+}
 
 type HttpReq struct {
 	method  string
@@ -21,12 +48,20 @@ type HttpReq struct {
 	body    []byte
 }
 
-func (m *HttpReq) String() string {
+func (m *HttpReq) RawBody() []byte {
+	return m.body
+}
+
+func (m *HttpReq) DecodeBody() (string, error) {
+	return decodeToString(m.headers["content-type"], m.body)
+}
+
+func (m *HttpReq) StringHeader() string {
 	headStr := ""
 	for k, v := range m.headers {
 		headStr += k + ": " + v + "\r\n"
 	}
-	return fmt.Sprintf("%s %s %s\r\n%s\r\n%s", m.method, m.url, m.version, headStr, string(m.body))
+	return fmt.Sprintf("%s %s %s\r\n%s\r\n", m.method, m.url, m.version, headStr)
 }
 
 func (m *HttpReq) Match(filter *Filter) bool {
@@ -62,13 +97,20 @@ type HttpResp struct {
 	body       []byte
 }
 
+func (m *HttpResp) RawBody() []byte {
+	return m.body
+}
 
-func (m *HttpResp) String() string {
+func (m *HttpResp) DecodeBody() (string, error) {
+	return decodeToString(m.headers["content-type"], m.body)
+}
+
+func (m *HttpResp) StringHeader() string {
 	headStr := ""
 	for k, v := range m.headers {
 		headStr += k + ": " + v + "\r\n"
 	}
-	return fmt.Sprintf("%s %s %s\r\n%s\r\n%s", m.version, m.statusCode, m.statusMsg, headStr, string(m.body))
+	return fmt.Sprintf("%s %s %s\r\n%s\r\n", m.version, m.statusCode, m.statusMsg, headStr)
 }
 
 func (m *HttpResp) Match(filter *Filter) bool {
@@ -95,7 +137,6 @@ func (m *HttpResp) Match(filter *Filter) bool {
 	}
 	return true
 }
-
 
 func mapCopy(dst, src interface{}) {
 	dv, sv := reflect.ValueOf(dst), reflect.ValueOf(src)

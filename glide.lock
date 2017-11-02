@@ -1,5 +1,5 @@
-hash: 1b30ed3e71bd4ab386b7d211f7890b3df291b0ead262d95b9c00782f6cd797f1
-updated: 2017-07-27T10:20:52.579153231Z
+hash: 5e48775f3bac55d603f9c413f5cc5ff99faea04169fac4969f06a815acedb581
+updated: 2017-11-02T08:30:34.121535661Z
 imports:
 - name: github.com/google/gopacket
   version: 8af772c0bcc826f671fd7c133917fec9686d720d
@@ -8,4 +8,8 @@ imports:
   - pcap
 - name: github.com/juju/errors
   version: c7d06af17c68cd34c835053720b21f6549d9b0ee
+- name: github.com/ugorji/go
+  version: 54210f4e076c57f351166f0ed60e67d3fca57a36
+  subpackages:
+  - codec
 testImports: []

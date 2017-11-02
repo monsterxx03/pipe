@@ -1,10 +1,10 @@
 package redis
 
 import (
-	"io"
-	"github.com/monsterxx03/pipe/decoder"
 	"bufio"
 	"github.com/juju/errors"
+	"github.com/monsterxx03/pipe/decoder"
+	"io"
 )
 
 const (
@@ -14,13 +14,14 @@ const (
 	respString = '$'
 	respArray  = '*'
 )
+
 var NIL = []byte("nil")
 
 type Decoder struct {
 	buf *bufio.Reader
 }
 
-func (d *Decoder) Decode(reader io.Reader, writer io.Writer) error {
+func (d *Decoder) Decode(reader io.Reader, writer io.Writer, opts *decoder.Options) error {
 	d.buf = bufio.NewReader(reader)
 	for {
 		if result, err := d.decodeRedisMsg(); err != nil {
@@ -36,7 +37,6 @@ func (d *Decoder) Decode(reader io.Reader, writer io.Writer) error {
 func (d *Decoder) SetFilter(filter string) {
 
 }
-
 
 func (d *Decoder) decodeRedisMsg() ([]byte, error) {
 	line, err := d.buf.ReadBytes('\n')
@@ -75,7 +75,7 @@ func (d *Decoder) decodeRedisMsg() ([]byte, error) {
 		for i := 0; i < arrayLen; i++ {
 			tmp, _ := d.decodeRedisMsg()
 			result = append(result, tmp...)
-			if i < arrayLen -1 {
+			if i < arrayLen-1 {
 				result = append(result, byte(' '))
 			}
 		}
@@ -107,7 +107,6 @@ func parseLen(p []byte) (int, error) {
 
 	return n, nil
 }
-
 
 func init() {
 	decoder.Register("redis", new(Decoder))

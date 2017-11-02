@@ -1,12 +1,12 @@
 package http
 
 import (
+	"bufio"
 	"github.com/juju/errors"
 	"github.com/monsterxx03/pipe/decoder"
 	"io"
-	"strings"
-	"bufio"
 	"strconv"
+	"strings"
 )
 
 var SKIP = errors.New("Skip msg")
@@ -16,7 +16,7 @@ type Decoder struct {
 	filter *Filter
 }
 
-func (d *Decoder) Decode(reader io.Reader, writer io.Writer) error {
+func (d *Decoder) Decode(reader io.Reader, writer io.Writer, opts *decoder.Options) error {
 	d.buf = bufio.NewReader(reader)
 	for {
 		msg, err := d.decodeHttp()
@@ -26,7 +26,17 @@ func (d *Decoder) Decode(reader io.Reader, writer io.Writer) error {
 			}
 			return err
 		}
-		writer.Write([]byte(msg.String()))
+		writer.Write([]byte(msg.StringHeader()))
+		if opts.DeepDecode {
+			_msg, err := msg.DecodeBody()
+			if err != nil {
+				return err
+			}
+			writer.Write([]byte(_msg))
+		} else {
+			writer.Write([]byte(msg.RawBody()))
+		}
+		writer.Write([]byte("\n"))
 	}
 	return nil
 }
@@ -99,13 +109,13 @@ func parseHeaders(buf *bufio.Reader) (map[string]string, error) {
 		}
 		line = line[:len(line)-2] // remove \r\n
 		result := strings.SplitN(line, ":", 2)
-		headers[strings.TrimSpace(result[0])] = strings.TrimSpace(result[1])
+		headers[strings.ToLower(strings.TrimSpace(result[0]))] = strings.TrimSpace(result[1])
 	}
 	return headers, nil
 }
 
 func parseBody(headers map[string]string, reader *bufio.Reader) []byte {
-	length, ok := headers["Content-Length"]
+	length, ok := headers["content-length"]
 	if ok {
 		bodyLen, _ := strconv.Atoi(length)
 		body := make([]byte, bodyLen)
