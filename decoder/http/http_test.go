@@ -1,9 +1,9 @@
 package http
 
 import (
-	"testing"
 	"bufio"
 	"bytes"
+	"testing"
 )
 
 func assertEqual(t *testing.T, result interface{}, expected interface{}) {
@@ -24,8 +24,8 @@ func TestDecodeHttpReq(t *testing.T) {
 	req := _data.(*HttpReq)
 	assertEqual(t, req.method, "POST")
 	assertEqual(t, req.url, "/test")
-	assertEqual(t, req.headers["Host"], "google.com")
-	assertEqual(t, req.headers["User-Agent"], "curl")
+	assertEqual(t, req.headers["host"], "google.com")
+	assertEqual(t, req.headers["user-agent"], "curl")
 	assertEqual(t, string(req.body), "Hello")
 }
 
@@ -41,7 +41,7 @@ func TestDecodeHttpResp(t *testing.T) {
 	resp := _data.(*HttpResp)
 	assertEqual(t, resp.statusCode, 200)
 	assertEqual(t, resp.statusMsg, "OK")
-	assertEqual(t, resp.headers["Host"], "google.com")
+	assertEqual(t, resp.headers["host"], "google.com")
 	assertEqual(t, string(resp.body), "Hello World")
 }
 
@@ -64,7 +64,6 @@ func TestHttpReqFilter(t *testing.T) {
 	req := _data.(*HttpReq)
 	assertEqual(t, req.url, "/test/hahax")
 }
-
 
 func TestHttpFilterPlainString(t *testing.T) {
 	filter := NewFilter("url: /home & method: get")

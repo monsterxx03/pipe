@@ -1,10 +1,11 @@
 package redis
 
 import (
-	"testing"
-	"bytes"
-	"io"
 	"bufio"
+	"bytes"
+	dp "github.com/monsterxx03/pipe/decoder"
+	"io"
+	"testing"
 )
 
 func checkRedisCmd(t *testing.T, data []byte, expected string) {
@@ -12,7 +13,7 @@ func checkRedisCmd(t *testing.T, data []byte, expected string) {
 	decoder.SetFilter("")
 	pr, pw := io.Pipe()
 	go func() {
-		err := decoder.Decode(bytes.NewReader(data), pw)
+		err := decoder.Decode(bytes.NewReader(data), pw, new(dp.Options))
 		if err != nil && err != io.EOF {
 			t.Error(err)
 		}

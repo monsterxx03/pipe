@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/ugorji/go/codec"
 	"reflect"
@@ -18,11 +19,55 @@ type Http interface {
 	RawBody() []byte
 }
 
-func prettyPrint(v map[string]interface{}) {
+func prettyPrint(v map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
 	for key, value := range v {
-		keyType := reflect.ValueOf(key).Kind()
-		valueType := reflect.ValueOf(value).Kind()
+		switch reflect.ValueOf(value).Kind() {
+		case reflect.Map:
+			result[key] = _prettyMap(value.(map[interface{}]interface{}))
+		case reflect.Slice:
+			result[key] = _prettySlice(value)
+		default:
+			result[key] = value
+		}
 	}
+	return result
+}
+
+func _prettyMap(m map[interface{}]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range m {
+		switch reflect.ValueOf(v).Kind() {
+		case reflect.Map:
+			result[k.(string)] = _prettyMap(v.(map[interface{}]interface{}))
+		case reflect.Slice:
+			result[k.(string)] = _prettySlice(v)
+		default:
+			result[k.(string)] = v
+		}
+	}
+	return result
+}
+
+func _prettySlice(s interface{}) []interface{} {
+	result := make([]interface{}, 0)
+	rs := reflect.ValueOf(s)
+	for i := 0; i < rs.Len(); i++ {
+		v := rs.Index(i).Interface()
+		switch reflect.ValueOf(v).Kind() {
+		case reflect.Map:
+			result = append(result, _prettyMap(v.(map[interface{}]interface{})))
+		case reflect.Slice:
+			if data, ok := v.([]byte); ok {
+				result = append(result, string(data))
+			} else {
+				result = append(result, _prettySlice(v))
+			}
+		default:
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func decodeToString(contentType string, data []byte) (string, error) {
@@ -34,8 +79,11 @@ func decodeToString(contentType string, data []byte) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		prettyPrint(v)
-		return fmt.Sprint(v), nil
+		pv, err := json.MarshalIndent(prettyPrint(v), "", " ")
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprint(string(pv)), nil
 	}
 	return string(data), nil
 }
