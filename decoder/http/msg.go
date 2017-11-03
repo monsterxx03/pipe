@@ -41,9 +41,26 @@ func _prettyMap(m map[interface{}]interface{}) map[string]interface{} {
 		case reflect.Map:
 			result[k.(string)] = _prettyMap(v.(map[interface{}]interface{}))
 		case reflect.Slice:
-			result[k.(string)] = _prettySlice(v)
+			if data, ok := v.([]byte); ok {
+				result[k.(string)] = string(data)
+			} else {
+				result[k.(string)] = _prettySlice(v)
+			}
 		default:
-			result[k.(string)] = v
+			switch k.(type) {
+			case int:
+				result[strconv.Itoa(k.(int))] = v
+			case int8:
+				result[strconv.Itoa(int(k.(int8)))] = v
+			case int16:
+				result[strconv.Itoa(int(k.(int16)))] = v
+			case int32:
+				result[strconv.Itoa(int(k.(int32)))] = v
+			case int64:
+				result[strconv.Itoa(int(k.(int64)))] = v
+			default:
+				result[k.(string)] = v
+			}
 		}
 	}
 	return result

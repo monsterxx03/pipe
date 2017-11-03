@@ -5,6 +5,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/monsterxx03/pipe/decoder"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 )
@@ -24,13 +25,15 @@ func (d *Decoder) Decode(reader io.Reader, writer io.Writer, opts *decoder.Optio
 			if err == SKIP {
 				continue
 			}
-			return err
+			log.Println(err)
+			continue
 		}
 		writer.Write([]byte(msg.StringHeader()))
 		if opts.DeepDecode {
 			_msg, err := msg.DecodeBody()
 			if err != nil {
-				return err
+				log.Println(err)
+				continue
 			}
 			writer.Write([]byte(_msg))
 		} else {
